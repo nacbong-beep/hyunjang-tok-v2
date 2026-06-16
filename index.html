@@ -3207,26 +3207,33 @@ function renderInspectionDetail(el) {
     </div>
     <!-- 도면 추가 모달 -->
     <div id="add-doc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
-      <div style="background:var(--card);border-radius:16px;padding:24px;width:min(780px,95vw);max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
-        <div style="font-size:15px;font-weight:700;margin-bottom:4px">도면 추가</div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:16px">도면관리 · 시공관리에서 선택하세요</div>
+      <div style="background:var(--card);border-radius:16px;padding:24px;width:min(780px,95vw);max-height:90vh;display:flex;flex-direction:column;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+          <div style="font-size:15px;font-weight:700">도면 추가</div>
+          <span id="doc-selected-count" style="font-size:12px;color:var(--primary);font-weight:700"></span>
+        </div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">도면관리 · 시공관리에서 선택하세요 (복수 선택 가능)</div>
         <input id="doc-search-input" class="modal-input" placeholder="도면 검색..." style="margin-bottom:12px" oninput="filterInspectionDocs(this.value)">
-        <div id="doc-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;max-height:65vh;overflow-y:auto">
+        <div id="doc-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;overflow-y:auto;flex:1;max-height:60vh">
           ${inspectionDocs.length === 0 ? '<div style="text-align:center;color:var(--muted);padding:20px;grid-column:1/-1">도면이 없습니다</div>' :
             inspectionDocs.map(doc => `
-              <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;background:var(--surface);transition:box-shadow .15s" onclick="addInspectionItem('${folder.id}','${doc.id}').then(()=>{closeAddDocModal();renderInspectionDetail(document.getElementById('main-content'))})" onmouseover="this.style.boxShadow='0 2px 12px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow=''">
+              <div class="doc-card" data-id="${doc.id}" style="border:2px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;background:var(--surface);transition:all .15s;position:relative" onclick="toggleDocSelect('${doc.id}',this)">
+                <div style="position:absolute;top:6px;right:6px;z-index:2">
+                  <div class="doc-check" style="width:22px;height:22px;border-radius:50%;border:2px solid #ccc;background:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;transition:all .15s"></div>
+                </div>
                 <div style="width:100%;height:140px;background:var(--surface);display:flex;align-items:center;justify-content:center;overflow:hidden">
                   <img src="${doc.file_url||''}" style="width:100%;height:100%;object-fit:contain" onerror="this.parentElement.innerHTML='<span style=font-size:32px>📄</span>'">
                 </div>
                 <div style="padding:8px 10px;border-top:1px solid var(--border)">
                   <div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${doc.title}</div>
-                  <div style="font-size:10px;color:var(--muted);margin-top:2px;display:flex;justify-content:space-between;align-items:center">
-                    <span>${doc.category||''} · ${doc.doc_type==='drawing'?'도면관리':'시공관리'}</span>
-                    <span style="color:var(--primary);font-weight:700;font-size:11px">추가</span>
-                  </div>
+                  <div style="font-size:10px;color:var(--muted);margin-top:2px">${doc.category||''} · ${doc.doc_type==='drawing'?'도면관리':'시공관리'}</div>
                 </div>
               </div>
             `).join('')}
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+          <button onclick="closeAddDocModal()" class="btn-ghost">취소</button>
+          <button onclick="submitAddDocs()" class="btn-primary" id="submit-add-docs-btn">선택 추가</button>
         </div>
         <div style="margin-top:16px;text-align:right">
           <button onclick="closeAddDocModal()" class="btn-ghost">닫기</button>
@@ -3273,12 +3280,53 @@ function initItemDrag() {
   });
 }
 
+let selectedDocIds = new Set();
+
+function toggleDocSelect(docId, el) {
+  if(selectedDocIds.has(docId)) {
+    selectedDocIds.delete(docId);
+    el.style.borderColor = 'var(--border)';
+    el.style.background = 'var(--surface)';
+    el.querySelector('.doc-check').style.background = '#fff';
+    el.querySelector('.doc-check').style.borderColor = '#ccc';
+    el.querySelector('.doc-check').textContent = '';
+  } else {
+    selectedDocIds.add(docId);
+    el.style.borderColor = 'var(--primary)';
+    el.style.background = '#f0f0ff';
+    el.querySelector('.doc-check').style.background = 'var(--primary)';
+    el.querySelector('.doc-check').style.borderColor = 'var(--primary)';
+    el.querySelector('.doc-check').textContent = '✓';
+    el.querySelector('.doc-check').style.color = '#fff';
+  }
+  const count = selectedDocIds.size;
+  const countEl = document.getElementById('doc-selected-count');
+  if(countEl) countEl.textContent = count > 0 ? `${count}개 선택됨` : '';
+  const btn = document.getElementById('submit-add-docs-btn');
+  if(btn) btn.textContent = count > 0 ? `${count}개 추가` : '선택 추가';
+}
+
+async function submitAddDocs() {
+  if(selectedDocIds.size === 0) { alert('도면을 선택해주세요.'); return; }
+  const folderId = currentInspectionFolder?.id;
+  if(!folderId) return;
+  const btn = document.getElementById('submit-add-docs-btn');
+  if(btn) { btn.disabled = true; btn.textContent = '추가 중...'; }
+  for(const docId of selectedDocIds) {
+    await addInspectionItem(folderId, docId);
+  }
+  selectedDocIds.clear();
+  closeAddDocModal();
+  renderInspectionDetail(document.getElementById('main-content'));
+}
+
 function openAddDocModal() {
   document.getElementById('add-doc-modal').style.display = 'flex';
 }
 
 function closeAddDocModal() {
   document.getElementById('add-doc-modal').style.display = 'none';
+  selectedDocIds.clear();
 }
 
 function filterInspectionDocs(q) {
