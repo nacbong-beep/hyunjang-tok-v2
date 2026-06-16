@@ -2880,32 +2880,43 @@ let inspectionItems = {};
 let currentInspectionFolder = null;
 let inspectionDocs = [];
 
+function getInspectionAuth() {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  let userId = null;
+  try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
+  return { token, userId };
+}
+
 async function loadInspectionFolders() {
+  const { token, userId } = getInspectionAuth();
   if(!userId) return;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/inspection_folders?user_id=eq.${userId}&order=created_at.desc`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}` }
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
   });
   if(res.ok) inspectionFolders = await res.json();
 }
 
 async function loadInspectionItems(folderId) {
+  const { token } = getInspectionAuth();
   const res = await fetch(`${SUPABASE_URL}/rest/v1/inspection_items?folder_id=eq.${folderId}&order=sort_order.asc`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}` }
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
   });
   if(res.ok) inspectionItems[folderId] = await res.json();
 }
 
 async function loadAllLibraryDocs() {
+  const { token } = getInspectionAuth();
   const res = await fetch(`${SUPABASE_URL}/rest/v1/library_docs?select=*&order=created_at.desc`, {
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}` }
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
   });
   if(res.ok) inspectionDocs = await res.json();
 }
 
 async function createInspectionFolder(title) {
+  const { token, userId } = getInspectionAuth();
   const res = await fetch(`${SUPABASE_URL}/rest/v1/inspection_folders`, {
     method: 'POST',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
     body: JSON.stringify({ user_id: userId, title })
   });
   if(res.ok) {
@@ -2916,20 +2927,22 @@ async function createInspectionFolder(title) {
 }
 
 async function deleteInspectionFolder(id) {
+  const { token } = getInspectionAuth();
   await fetch(`${SUPABASE_URL}/rest/v1/inspection_folders?id=eq.${id}`, {
     method: 'DELETE',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}` }
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
   });
   inspectionFolders = inspectionFolders.filter(f => f.id !== id);
   delete inspectionItems[id];
 }
 
 async function addInspectionItem(folderId, docId, paperSize='A4') {
+  const { token } = getInspectionAuth();
   const items = inspectionItems[folderId] || [];
   const sortOrder = items.length;
   const res = await fetch(`${SUPABASE_URL}/rest/v1/inspection_items`, {
     method: 'POST',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
     body: JSON.stringify({ folder_id: folderId, doc_id: docId, sort_order: sortOrder, paper_size: paperSize })
   });
   if(res.ok) {
@@ -2940,28 +2953,31 @@ async function addInspectionItem(folderId, docId, paperSize='A4') {
 }
 
 async function removeInspectionItem(itemId, folderId) {
+  const { token } = getInspectionAuth();
   await fetch(`${SUPABASE_URL}/rest/v1/inspection_items?id=eq.${itemId}`, {
     method: 'DELETE',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}` }
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
   });
   inspectionItems[folderId] = inspectionItems[folderId].filter(i => i.id !== itemId);
 }
 
 async function updateInspectionItemOrder(folderId) {
+  const { token } = getInspectionAuth();
   const items = inspectionItems[folderId] || [];
   for(let i=0; i<items.length; i++) {
     await fetch(`${SUPABASE_URL}/rest/v1/inspection_items?id=eq.${items[i].id}`, {
       method: 'PATCH',
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ sort_order: i })
     });
   }
 }
 
 async function updateInspectionItemPaperSize(itemId, folderId, paperSize) {
+  const { token } = getInspectionAuth();
   await fetch(`${SUPABASE_URL}/rest/v1/inspection_items?id=eq.${itemId}`, {
     method: 'PATCH',
-    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ paper_size: paperSize })
   });
   const item = (inspectionItems[folderId]||[]).find(i=>i.id===itemId);
