@@ -2,7 +2,7 @@
   "name": "현장톡",
   "short_name": "현장톡",
   "description": "건설현장 카카오톡 메시지 관리",
-  "start_url": "/hyunjang-tok/",
+  "start_url": "/hyunjang-tok-v2/",
   "display": "standalone",
   "background_color": "#1a2332",
   "theme_color": "#1a2332",
