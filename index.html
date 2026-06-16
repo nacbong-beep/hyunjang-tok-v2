@@ -3173,32 +3173,18 @@ async function printInspectionFolder(folderId) {
   const validItems = signedItems.filter(Boolean);
   
   const printWin = window.open('', '_blank');
-  printWin.document.write(`<!DOCTYPE html><html><head><title>검측요청서 - ${inspectionFolders.find(f=>f.id===folderId)?.title||''}</title>
-  <style>
+  const styleStr = `
     * { margin:0; padding:0; box-sizing:border-box; }
     body { background:#fff; }
     .page { display:flex; align-items:center; justify-content:center; page-break-after:always; overflow:hidden; }
     .page:last-child { page-break-after:avoid; }
     .page img { max-width:100%; max-height:100%; object-fit:contain; }
-    ${validItems.map((item,i) => `
-      @page page${i} { size: ${item.paper_size} portrait; margin:8mm; }
-      .page-${i} { page: page${i}; width:${item.paper_size==='A3'?'420mm':'210mm'}; height:${item.paper_size==='A3'?'297mm':'297mm'}; }
-    `).join('')}
-    @media print {
-      ${validItems.map((item,i) => `.page-${i} { page: page${i}; }`).join('')}
-    }
-  </style></head><body>
-  ${validItems.map((item,i) => `
-    <div class="page page-${i}">
-      <img src="${item.url}" alt="${item.title}">
-    </div>
-  `).join('')}
-  <script>
-    window.onload = function() {
-      setTimeout(function() { window.print(); }, 500);
-    };
-  </script>
-  </body></html>`);
+    ${validItems.map((item,i) => `@page page${i} { size: ${item.paper_size} portrait; margin:8mm; } .page-${i} { page: page${i}; width:${item.paper_size==='A3'?'420mm':'210mm'}; height:297mm; }`).join(' ')}
+    @media print { ${validItems.map((item,i) => `.page-${i} { page: page${i}; }`).join('')} }
+  `;
+  const pagesHtml = validItems.map((item,i) => `<div class="page page-${i}"><img src="${item.url}" alt="${item.title}"></div>`).join('');
+  const scriptStr = 'window.onload=function(){setTimeout(function(){window.print();},500);};';
+  printWin.document.write('<!DOCTYPE html><html><head><title>검측요청서</title><style>' + styleStr + '<\/style><\/head><body>' + pagesHtml + '<script>' + scriptStr + '<\/scr' + 'ipt><\/body><\/html>');
   printWin.document.close();
 }
 
