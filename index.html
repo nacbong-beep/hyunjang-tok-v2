@@ -2946,7 +2946,7 @@ async function deleteInspectionFolder(id) {
   delete inspectionItems[id];
 }
 
-async function addInspectionItem(folderId, docId, paperSize='A4') {
+async function addInspectionItem(folderId, docId, paperSize='A4 landscape') {
   const { token } = getInspectionAuth();
   const items = inspectionItems[folderId] || [];
   const sortOrder = items.length;
@@ -3196,8 +3196,8 @@ function renderInspectionDetail(el) {
                 <div style="font-size:11px;color:var(--muted);margin-top:2px">${doc ? (doc.category||'') : ''}</div>
               </div>
               <select onchange="updateInspectionItemPaperSize('${item.id}','${folder.id}',this.value)" style="border:1px solid var(--border2);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--card);color:var(--text)">
-                <option value="A4 portrait" ${item.paper_size==='A4 portrait'||item.paper_size==='A4'?'selected':''}>A4 세로</option>
-                <option value="A4 landscape" ${item.paper_size==='A4 landscape'?'selected':''}>A4 가로</option>
+                <option value="A4 portrait" ${item.paper_size==='A4 portrait'?'selected':''}>A4 세로</option>
+                <option value="A4 landscape" ${item.paper_size==='A4 landscape'||item.paper_size==='A4'||!item.paper_size?'selected':''}>A4 가로</option>
                 <option value="A3 portrait" ${item.paper_size==='A3 portrait'?'selected':''}>A3 세로</option>
                 <option value="A3 landscape" ${item.paper_size==='A3 landscape'?'selected':''}>A3 가로</option>
               </select>
