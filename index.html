@@ -3197,20 +3197,24 @@ function renderInspectionDetail(el) {
     </div>
     <!-- 도면 추가 모달 -->
     <div id="add-doc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
-      <div style="background:var(--card);border-radius:16px;padding:24px;width:500px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <div style="background:var(--card);border-radius:16px;padding:24px;width:min(780px,95vw);max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
         <div style="font-size:15px;font-weight:700;margin-bottom:4px">도면 추가</div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:16px">도면관리 · 시공관리에서 선택하세요</div>
         <input id="doc-search-input" class="modal-input" placeholder="도면 검색..." style="margin-bottom:12px" oninput="filterInspectionDocs(this.value)">
-        <div id="doc-list" style="display:grid;gap:8px;max-height:400px;overflow-y:auto">
-          ${inspectionDocs.length === 0 ? '<div style="text-align:center;color:var(--muted);padding:20px">도면이 없습니다</div>' :
+        <div id="doc-list" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;max-height:65vh;overflow-y:auto">
+          ${inspectionDocs.length === 0 ? '<div style="text-align:center;color:var(--muted);padding:20px;grid-column:1/-1">도면이 없습니다</div>' :
             inspectionDocs.map(doc => `
-              <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--surface)" onclick="addInspectionItem('${folder.id}','${doc.id}').then(()=>{closeAddDocModal();renderInspectionDetail(document.getElementById('main-content'))})">
-                <img src="${doc.file_url||''}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border)" onerror="this.style.display='none'">
-                <div style="flex:1;min-width:0">
-                  <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${doc.title}</div>
-                  <div style="font-size:11px;color:var(--muted)">${doc.category||''} · ${doc.doc_type==='drawing'?'도면관리':'시공관리'}</div>
+              <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;cursor:pointer;background:var(--surface);transition:box-shadow .15s" onclick="addInspectionItem('${folder.id}','${doc.id}').then(()=>{closeAddDocModal();renderInspectionDetail(document.getElementById('main-content'))})" onmouseover="this.style.boxShadow='0 2px 12px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow=''">
+                <div style="width:100%;height:140px;background:var(--surface);display:flex;align-items:center;justify-content:center;overflow:hidden">
+                  <img src="${doc.file_url||''}" style="width:100%;height:100%;object-fit:contain" onerror="this.parentElement.innerHTML='<span style=font-size:32px>📄</span>'">
                 </div>
-                <span style="font-size:12px;color:var(--primary);font-weight:700">추가</span>
+                <div style="padding:8px 10px;border-top:1px solid var(--border)">
+                  <div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${doc.title}</div>
+                  <div style="font-size:10px;color:var(--muted);margin-top:2px;display:flex;justify-content:space-between;align-items:center">
+                    <span>${doc.category||''} · ${doc.doc_type==='drawing'?'도면관리':'시공관리'}</span>
+                    <span style="color:var(--primary);font-weight:700;font-size:11px">추가</span>
+                  </div>
+                </div>
               </div>
             `).join('')}
         </div>
