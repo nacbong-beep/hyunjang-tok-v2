@@ -772,6 +772,7 @@ function renderSidebar() {
       ${navItem('📊','공정표 관리','library')}
       ${navItem('📐','도면 관리','drawing')}
       ${navItem('🏗️','시공 관리','construction')}
+      ${navItem('📋','검측요청서','inspection')}
       ${navItem('✅','할일','todo',pending)}
       ${navItem('⚙️','설정','settings')}
       <div class="nav-item ${currentView==='search'?'active':''}" onclick="setView('search')" style="margin:4px 0;border:1px solid rgba(255,255,255,.12);border-radius:9px">
@@ -814,7 +815,7 @@ function setView(v) {
   currentView = v;
   closeSidebar();
   if(v.startsWith('cat_')) { selectedCategory=v.replace('cat_',''); currentView='search'; }
-  const titles = {dashboard:'대시보드',calendar:'캘린더',weekly:'주간업무일지',library:'공정표 관리',drawing:'도면 관리',construction:'시공 관리',todo:'할일',search:'검색',input:'메시지 입력',settings:'설정'};
+  const titles = {dashboard:'대시보드',calendar:'캘린더',weekly:'주간업무일지',library:'공정표 관리',drawing:'도면 관리',construction:'시공 관리',inspection:'검측요청서',todo:'할일',search:'검색',input:'메시지 입력',settings:'설정'};
   document.getElementById('header-title').textContent = titles[v]||(v.startsWith('cat_')?v.replace('cat_','')+'  검색':v);
   const guideEl = document.getElementById('header-guide');
   if(guideEl) guideEl.style.display = (currentView==='dashboard') ? 'block' : 'none';
@@ -829,6 +830,7 @@ function setView(v) {
   else if(currentView==='library') renderLibraryView(el, 'library');
   else if(currentView==='drawing') renderLibraryView(el, 'drawing');
   else if(currentView==='construction') renderLibraryView(el, 'construction');
+  else if(currentView==='inspection') renderInspectionView(el);
   else if(currentView==='settings') renderSettingsView(el);
   else if(currentView.startsWith('room_')) {
     renderRoomView(el,v);
@@ -2869,6 +2871,335 @@ async function deleteLibraryDoc(id, filePath) {
   libViewDoc = null;
   showToast('🗑️ 삭제됐어요');
   renderLibraryView(document.getElementById('main-content'), currentView||'library');
+}
+
+
+// ===== 검측요청서 =====
+let inspectionFolders = [];
+let inspectionItems = {};
+let currentInspectionFolder = null;
+let inspectionDocs = [];
+
+async function loadInspectionFolders() {
+  if(!userId) return;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/inspection_folders?user_id=eq.${userId}&order=created_at.desc`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}` }
+  });
+  if(res.ok) inspectionFolders = await res.json();
+}
+
+async function loadInspectionItems(folderId) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/inspection_items?folder_id=eq.${folderId}&order=sort_order.asc`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}` }
+  });
+  if(res.ok) inspectionItems[folderId] = await res.json();
+}
+
+async function loadAllLibraryDocs() {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/library_docs?select=*&order=created_at.desc`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}` }
+  });
+  if(res.ok) inspectionDocs = await res.json();
+}
+
+async function createInspectionFolder(title) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/inspection_folders`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ user_id: userId, title })
+  });
+  if(res.ok) {
+    const rows = await res.json();
+    inspectionFolders.unshift(rows[0]);
+    return rows[0];
+  }
+}
+
+async function deleteInspectionFolder(id) {
+  await fetch(`${SUPABASE_URL}/rest/v1/inspection_folders?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}` }
+  });
+  inspectionFolders = inspectionFolders.filter(f => f.id !== id);
+  delete inspectionItems[id];
+}
+
+async function addInspectionItem(folderId, docId, paperSize='A4') {
+  const items = inspectionItems[folderId] || [];
+  const sortOrder = items.length;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/inspection_items`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ folder_id: folderId, doc_id: docId, sort_order: sortOrder, paper_size: paperSize })
+  });
+  if(res.ok) {
+    const rows = await res.json();
+    if(!inspectionItems[folderId]) inspectionItems[folderId] = [];
+    inspectionItems[folderId].push(rows[0]);
+  }
+}
+
+async function removeInspectionItem(itemId, folderId) {
+  await fetch(`${SUPABASE_URL}/rest/v1/inspection_items?id=eq.${itemId}`, {
+    method: 'DELETE',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}` }
+  });
+  inspectionItems[folderId] = inspectionItems[folderId].filter(i => i.id !== itemId);
+}
+
+async function updateInspectionItemOrder(folderId) {
+  const items = inspectionItems[folderId] || [];
+  for(let i=0; i<items.length; i++) {
+    await fetch(`${SUPABASE_URL}/rest/v1/inspection_items?id=eq.${items[i].id}`, {
+      method: 'PATCH',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sort_order: i })
+    });
+  }
+}
+
+async function updateInspectionItemPaperSize(itemId, folderId, paperSize) {
+  await fetch(`${SUPABASE_URL}/rest/v1/inspection_items?id=eq.${itemId}`, {
+    method: 'PATCH',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paper_size: paperSize })
+  });
+  const item = (inspectionItems[folderId]||[]).find(i=>i.id===itemId);
+  if(item) item.paper_size = paperSize;
+}
+
+async function renderInspectionView(el) {
+  el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">불러오는 중...</div>';
+  await loadInspectionFolders();
+  await loadAllLibraryDocs();
+  if(currentInspectionFolder) {
+    await loadInspectionItems(currentInspectionFolder.id);
+    renderInspectionDetail(el);
+  } else {
+    renderInspectionList(el);
+  }
+}
+
+function renderInspectionList(el) {
+  el.innerHTML = `
+    <div style="max-width:900px;margin:0 auto;padding:0 0 40px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <h2 style="font-size:18px;font-weight:700;color:var(--text)">📋 검측요청서</h2>
+        <button onclick="openCreateFolderModal()" style="background:var(--primary);color:#fff;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">+ 새 검측 폴더</button>
+      </div>
+      ${inspectionFolders.length === 0 ? `
+        <div class="empty-box">검측 폴더가 없습니다.<br>새 검측 폴더를 만들어보세요.</div>
+      ` : `
+        <div style="display:grid;gap:10px">
+          ${inspectionFolders.map(f => `
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="openInspectionFolder('${f.id}')">
+              <div style="display:flex;align-items:center;gap:12px">
+                <span style="font-size:24px">📁</span>
+                <div>
+                  <div style="font-size:14px;font-weight:700;color:var(--text)">${f.title}</div>
+                  <div style="font-size:11px;color:var(--muted);margin-top:2px">${formatDate(f.created_at)}</div>
+                </div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button onclick="event.stopPropagation();printInspectionFolder('${f.id}')" style="background:#0f766e;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">🖨️ 인쇄</button>
+                <button onclick="event.stopPropagation();confirmDeleteFolder('${f.id}','${f.title.replace(/'/g,"\'")}')" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">삭제</button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `}
+    </div>
+    <!-- 폴더 생성 모달 -->
+    <div id="create-folder-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+      <div style="background:var(--card);border-radius:16px;padding:24px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+        <div style="font-size:15px;font-weight:700;margin-bottom:16px">새 검측 폴더</div>
+        <input id="folder-title-input" class="modal-input" placeholder="예: 302동 22층 바닥철근 검측" style="margin-bottom:16px">
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button onclick="closeCreateFolderModal()" class="btn-ghost">취소</button>
+          <button onclick="submitCreateFolder()" class="btn-primary">만들기</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function openCreateFolderModal() {
+  const modal = document.getElementById('create-folder-modal');
+  modal.style.display = 'flex';
+  setTimeout(() => document.getElementById('folder-title-input').focus(), 50);
+}
+
+function closeCreateFolderModal() {
+  document.getElementById('create-folder-modal').style.display = 'none';
+  document.getElementById('folder-title-input').value = '';
+}
+
+async function submitCreateFolder() {
+  const title = document.getElementById('folder-title-input').value.trim();
+  if(!title) return;
+  const folder = await createInspectionFolder(title);
+  closeCreateFolderModal();
+  if(folder) {
+    currentInspectionFolder = folder;
+    await loadInspectionItems(folder.id);
+    renderInspectionDetail(document.getElementById('main-content'));
+  }
+}
+
+async function confirmDeleteFolder(id, title) {
+  if(!confirm(`"${title}" 폴더를 삭제할까요?`)) return;
+  await deleteInspectionFolder(id);
+  renderInspectionList(document.getElementById('main-content'));
+}
+
+async function openInspectionFolder(id) {
+  currentInspectionFolder = inspectionFolders.find(f => f.id === id);
+  await loadInspectionItems(id);
+  renderInspectionDetail(document.getElementById('main-content'));
+}
+
+function renderInspectionDetail(el) {
+  const folder = currentInspectionFolder;
+  const items = inspectionItems[folder.id] || [];
+  
+  el.innerHTML = `
+    <div style="max-width:900px;margin:0 auto;padding:0 0 40px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <button onclick="currentInspectionFolder=null;renderInspectionList(document.getElementById('main-content'))" style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:6px 12px;font-size:12px;color:var(--muted);cursor:pointer;font-weight:700">← 목록</button>
+        <h2 style="font-size:16px;font-weight:700;color:var(--text);flex:1">📁 ${folder.title}</h2>
+        <button onclick="openAddDocModal()" style="background:var(--primary);color:#fff;border:none;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer">+ 도면 추가</button>
+        <button onclick="printInspectionFolder('${folder.id}')" style="background:#0f766e;color:#fff;border:none;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer">🖨️ 인쇄</button>
+      </div>
+      ${items.length === 0 ? `
+        <div class="empty-box">도면이 없습니다.<br>"도면 추가" 버튼으로 도면/시공관리에서 가져오세요.</div>
+      ` : `
+        <div style="display:grid;gap:10px" id="inspection-items-list">
+          ${items.map((item, idx) => {
+            const doc = inspectionDocs.find(d => d.id === item.doc_id);
+            return `
+            <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px" id="iitem-${item.id}">
+              <div style="display:flex;flex-direction:column;gap:4px">
+                <button onclick="moveInspectionItem('${item.id}','${folder.id}',-1)" ${idx===0?'disabled':''} style="background:var(--surface);border:1px solid var(--border2);border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:11px;${idx===0?'opacity:.3':''}">▲</button>
+                <button onclick="moveInspectionItem('${item.id}','${folder.id}',1)" ${idx===items.length-1?'disabled':''} style="background:var(--surface);border:1px solid var(--border2);border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:11px;${idx===items.length-1?'opacity:.3':''}">▼</button>
+              </div>
+              <div style="font-size:12px;font-weight:700;color:var(--muted);min-width:20px;text-align:center">${idx+1}</div>
+              ${doc ? `<img src="${doc.file_url||''}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border)" onerror="this.style.display='none'">` : '<div style="width:60px;height:60px;background:var(--surface);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px">📄</div>'}
+              <div style="flex:1;min-width:0">
+                <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${doc ? doc.title : '(삭제된 도면)'}</div>
+                <div style="font-size:11px;color:var(--muted);margin-top:2px">${doc ? (doc.category||'') : ''}</div>
+              </div>
+              <select onchange="updateInspectionItemPaperSize('${item.id}','${folder.id}',this.value)" style="border:1px solid var(--border2);border-radius:6px;padding:4px 8px;font-size:12px;background:var(--card);color:var(--text)">
+                <option value="A4" ${item.paper_size==='A4'?'selected':''}>A4</option>
+                <option value="A3" ${item.paper_size==='A3'?'selected':''}>A3</option>
+              </select>
+              <button onclick="removeInspectionItem('${item.id}','${folder.id}').then(()=>renderInspectionDetail(document.getElementById('main-content')))" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;font-weight:700">제거</button>
+            </div>`;
+          }).join('')}
+        </div>
+      `}
+    </div>
+    <!-- 도면 추가 모달 -->
+    <div id="add-doc-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+      <div style="background:var(--card);border-radius:16px;padding:24px;width:500px;max-height:80vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+        <div style="font-size:15px;font-weight:700;margin-bottom:4px">도면 추가</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:16px">도면관리 · 시공관리에서 선택하세요</div>
+        <input id="doc-search-input" class="modal-input" placeholder="도면 검색..." style="margin-bottom:12px" oninput="filterInspectionDocs(this.value)">
+        <div id="doc-list" style="display:grid;gap:8px;max-height:400px;overflow-y:auto">
+          ${inspectionDocs.length === 0 ? '<div style="text-align:center;color:var(--muted);padding:20px">도면이 없습니다</div>' :
+            inspectionDocs.map(doc => `
+              <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--surface)" onclick="addInspectionItem('${folder.id}','${doc.id}').then(()=>{closeAddDocModal();renderInspectionDetail(document.getElementById('main-content'))})">
+                <img src="${doc.file_url||''}" style="width:44px;height:44px;object-fit:cover;border-radius:6px;border:1px solid var(--border)" onerror="this.style.display='none'">
+                <div style="flex:1;min-width:0">
+                  <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${doc.title}</div>
+                  <div style="font-size:11px;color:var(--muted)">${doc.category||''} · ${doc.doc_type==='drawing'?'도면관리':'시공관리'}</div>
+                </div>
+                <span style="font-size:12px;color:var(--primary);font-weight:700">추가</span>
+              </div>
+            `).join('')}
+        </div>
+        <div style="margin-top:16px;text-align:right">
+          <button onclick="closeAddDocModal()" class="btn-ghost">닫기</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function openAddDocModal() {
+  document.getElementById('add-doc-modal').style.display = 'flex';
+}
+
+function closeAddDocModal() {
+  document.getElementById('add-doc-modal').style.display = 'none';
+}
+
+function filterInspectionDocs(q) {
+  const list = document.getElementById('doc-list');
+  if(!list) return;
+  const items = list.querySelectorAll('div[onclick]');
+  items.forEach(item => {
+    const text = item.textContent.toLowerCase();
+    item.style.display = text.includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+
+async function moveInspectionItem(itemId, folderId, dir) {
+  const items = inspectionItems[folderId] || [];
+  const idx = items.findIndex(i => i.id === itemId);
+  const newIdx = idx + dir;
+  if(newIdx < 0 || newIdx >= items.length) return;
+  [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
+  await updateInspectionItemOrder(folderId);
+  renderInspectionDetail(document.getElementById('main-content'));
+}
+
+async function printInspectionFolder(folderId) {
+  if(!inspectionItems[folderId]) await loadInspectionItems(folderId);
+  const items = inspectionItems[folderId] || [];
+  if(items.length === 0) { alert('출력할 도면이 없습니다.'); return; }
+  
+  // 이미지 URL 서명 갱신
+  const signedItems = await Promise.all(items.map(async item => {
+    const doc = inspectionDocs.find(d => d.id === item.doc_id);
+    if(!doc) return null;
+    let url = doc.file_url;
+    try {
+      const filePath = doc.file_path || (doc.file_url ? doc.file_url.split('/library/')[1]?.split('?')[0] : null);
+      if(filePath) url = await getSignedUrl(filePath) || url;
+    } catch(e) {}
+    return { url, paper_size: item.paper_size, title: doc.title };
+  }));
+  
+  const validItems = signedItems.filter(Boolean);
+  
+  const printWin = window.open('', '_blank');
+  printWin.document.write(`<!DOCTYPE html><html><head><title>검측요청서 - ${inspectionFolders.find(f=>f.id===folderId)?.title||''}</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#fff; }
+    .page { display:flex; align-items:center; justify-content:center; page-break-after:always; overflow:hidden; }
+    .page:last-child { page-break-after:avoid; }
+    .page img { max-width:100%; max-height:100%; object-fit:contain; }
+    ${validItems.map((item,i) => `
+      @page page${i} { size: ${item.paper_size} portrait; margin:8mm; }
+      .page-${i} { page: page${i}; width:${item.paper_size==='A3'?'420mm':'210mm'}; height:${item.paper_size==='A3'?'297mm':'297mm'}; }
+    `).join('')}
+    @media print {
+      ${validItems.map((item,i) => `.page-${i} { page: page${i}; }`).join('')}
+    }
+  </style></head><body>
+  ${validItems.map((item,i) => `
+    <div class="page page-${i}">
+      <img src="${item.url}" alt="${item.title}">
+    </div>
+  `).join('')}
+  <script>
+    window.onload = function() {
+      setTimeout(function() { window.print(); }, 500);
+    };
+  </script>
+  </body></html>`);
+  printWin.document.close();
 }
 
 async function renderLibraryView(el, storageType='library') {
