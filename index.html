@@ -3133,13 +3133,10 @@ function closeCreateFolderModal() {
 async function submitCreateFolder() {
   const title = document.getElementById('folder-title-input').value.trim();
   if(!title) return;
-  const folder = await createInspectionFolder(title);
+  await createInspectionFolder(title);
   closeCreateFolderModal();
-  if(folder) {
-    currentInspectionFolder = folder;
-    await loadInspectionItems(folder.id);
-    renderInspectionDetail(document.getElementById('main-content'));
-  }
+  await loadInspectionFolders();
+  renderInspectionList(document.getElementById('main-content'));
 }
 
 async function confirmDeleteFolder(id, title) {
