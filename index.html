@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <title>현장톡</title>
-<meta name="description" content="건설현장 카카오톡 메시지 관리-">
+<meta name="description" content="건설현장 카카오톡 메시지 관리">
 <meta name="theme-color" content="#1a2332">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -2999,19 +2999,21 @@ async function renderInspectionView(el) {
 function renderInspectionList(el) {
   el.innerHTML = `
     <div style="max-width:900px;margin:0 auto;padding:0 0 40px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
         <h2 style="font-size:18px;font-weight:700;color:var(--text)">📋 검측요청서</h2>
         <button onclick="openCreateFolderModal()" style="background:var(--primary);color:#fff;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">+ 새 검측 폴더</button>
       </div>
+      <input id="folder-search-input" class="modal-input" placeholder="🔍 검측 건 이름 검색..." style="margin-bottom:16px" oninput="filterFolderList(this.value)">
       ${inspectionFolders.length === 0 ? `
         <div class="empty-box">검측 폴더가 없습니다.<br>새 검측 폴더를 만들어보세요.</div>
       ` : `
-        <div style="display:grid;gap:10px">
+        <div style="display:grid;gap:10px" id="folder-list">
           ${inspectionFolders.map(f => `
-            <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;cursor:pointer" onclick="openInspectionFolder('${f.id}')">
+            <div class="drag-folder" data-id="${f.id}" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
               <div style="display:flex;align-items:center;gap:12px">
-                <span style="font-size:24px">📁</span>
-                <div>
+                <span class="drag-handle" style="font-size:18px;cursor:grab;color:var(--muted);padding:0 4px" title="드래그로 순서 변경">⠿</span>
+                <span style="font-size:24px" onclick="openInspectionFolder('${f.id}')" style="cursor:pointer">📁</span>
+                <div onclick="openInspectionFolder('${f.id}')" style="cursor:pointer">
                   <div style="font-size:14px;font-weight:700;color:var(--text)">${f.title}</div>
                   <div style="font-size:11px;color:var(--muted);margin-top:2px">${formatDate(f.created_at)}</div>
                 </div>
@@ -3037,6 +3039,45 @@ function renderInspectionList(el) {
       </div>
     </div>
   `;
+  setTimeout(() => initFolderDrag(), 0);
+}
+
+function filterFolderList(q) {
+  const list = document.getElementById('folder-list');
+  if(!list) return;
+  list.querySelectorAll('.drag-folder').forEach(el => {
+    const title = el.querySelector('div')?.textContent || '';
+    el.style.display = title.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+
+function initFolderDrag() {
+  const list = document.getElementById('folder-list');
+  if(!list) return;
+  let dragging = null;
+  list.querySelectorAll('.drag-folder').forEach(el => {
+    el.draggable = true;
+    el.addEventListener('dragstart', e => {
+      dragging = el;
+      setTimeout(() => el.style.opacity = '0.4', 0);
+    });
+    el.addEventListener('dragend', e => {
+      el.style.opacity = '';
+      dragging = null;
+      // 순서 저장
+      const newOrder = [...list.querySelectorAll('.drag-folder')].map(d => d.getAttribute('data-id'));
+      inspectionFolders.sort((a,b) => newOrder.indexOf(a.id) - newOrder.indexOf(b.id));
+    });
+    el.addEventListener('dragover', e => {
+      e.preventDefault();
+      if(dragging && dragging !== el) {
+        const rect = el.getBoundingClientRect();
+        const mid = rect.top + rect.height/2;
+        if(e.clientY < mid) list.insertBefore(dragging, el);
+        else list.insertBefore(dragging, el.nextSibling);
+      }
+    });
+  });
 }
 
 function openCreateFolderModal() {
@@ -3093,11 +3134,8 @@ function renderInspectionDetail(el) {
           ${items.map((item, idx) => {
             const doc = inspectionDocs.find(d => d.id === item.doc_id);
             return `
-            <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px" id="iitem-${item.id}">
-              <div style="display:flex;flex-direction:column;gap:4px">
-                <button onclick="moveInspectionItem('${item.id}','${folder.id}',-1)" ${idx===0?'disabled':''} style="background:var(--surface);border:1px solid var(--border2);border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:11px;${idx===0?'opacity:.3':''}">▲</button>
-                <button onclick="moveInspectionItem('${item.id}','${folder.id}',1)" ${idx===items.length-1?'disabled':''} style="background:var(--surface);border:1px solid var(--border2);border-radius:6px;width:24px;height:24px;cursor:pointer;font-size:11px;${idx===items.length-1?'opacity:.3':''}">▼</button>
-              </div>
+            <div class="drag-item" data-id="${item.id}" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px" id="iitem-${item.id}">
+              <span class="drag-handle" style="font-size:18px;cursor:grab;color:var(--muted);padding:0 4px" title="드래그로 순서 변경">⠿</span>
               <div style="font-size:12px;font-weight:700;color:var(--muted);min-width:20px;text-align:center">${idx+1}</div>
               ${doc ? `<img src="${doc.file_url||''}" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border)" onerror="this.style.display='none'">` : '<div style="width:60px;height:60px;background:var(--surface);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px">📄</div>'}
               <div style="flex:1;min-width:0">
@@ -3139,6 +3177,43 @@ function renderInspectionDetail(el) {
       </div>
     </div>
   `;
+  setTimeout(() => initItemDrag(), 0);
+}
+
+function initItemDrag() {
+  const list = document.getElementById('inspection-items-list');
+  if(!list) return;
+  const folderId = currentInspectionFolder?.id;
+  let dragging = null;
+  list.querySelectorAll('.drag-item').forEach(el => {
+    el.draggable = true;
+    el.addEventListener('dragstart', e => {
+      dragging = el;
+      setTimeout(() => el.style.opacity = '0.4', 0);
+    });
+    el.addEventListener('dragend', async e => {
+      el.style.opacity = '';
+      dragging = null;
+      // 순서 저장
+      const newOrder = [...list.querySelectorAll('.drag-item')].map(d => d.getAttribute('data-id'));
+      inspectionItems[folderId].sort((a,b) => newOrder.indexOf(a.id) - newOrder.indexOf(b.id));
+      await updateInspectionItemOrder(folderId);
+      // 번호 갱신
+      list.querySelectorAll('.drag-item').forEach((el,i) => {
+        const numEl = el.querySelectorAll('div')[0];
+        if(numEl) numEl.textContent = i+1;
+      });
+    });
+    el.addEventListener('dragover', e => {
+      e.preventDefault();
+      if(dragging && dragging !== el) {
+        const rect = el.getBoundingClientRect();
+        const mid = rect.top + rect.height/2;
+        if(e.clientY < mid) list.insertBefore(dragging, el);
+        else list.insertBefore(dragging, el.nextSibling);
+      }
+    });
+  });
 }
 
 function openAddDocModal() {
