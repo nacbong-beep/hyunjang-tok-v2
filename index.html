@@ -3003,7 +3003,7 @@ function renderInspectionList(el) {
         <h2 style="font-size:18px;font-weight:700;color:var(--text)">📋 검측요청서</h2>
         <button onclick="openCreateFolderModal()" style="background:var(--primary);color:#fff;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">+ 새 검측 폴더</button>
       </div>
-      <input id="folder-search-input" class="modal-input" placeholder="🔍 검측 건 이름 검색..." style="margin-bottom:16px" oninput="filterFolderList(this.value)">
+      <input id="folder-search-input" class="modal-input" placeholder="검측 이름 검색..." style="margin-bottom:16px" oninput="filterFolderList(this.value)">
       ${inspectionFolders.length === 0 ? `
         <div class="empty-box">검측 폴더가 없습니다.<br>새 검측 폴더를 만들어보세요.</div>
       ` : `
@@ -3019,6 +3019,7 @@ function renderInspectionList(el) {
                 </div>
               </div>
               <div style="display:flex;gap:8px">
+                <button onclick="event.stopPropagation();openRenameFolderModal('${f.id}','${f.title.replace(/'/g,"\'")}')" style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">수정</button>
                 <button onclick="event.stopPropagation();printInspectionFolder('${f.id}')" style="background:#0f766e;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">🖨️ 인쇄</button>
                 <button onclick="event.stopPropagation();confirmDeleteFolder('${f.id}','${f.title.replace(/'/g,"\'")}')" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">삭제</button>
               </div>
@@ -3031,15 +3032,54 @@ function renderInspectionList(el) {
     <div id="create-folder-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
       <div style="background:var(--card);border-radius:16px;padding:24px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
         <div style="font-size:15px;font-weight:700;margin-bottom:16px">새 검측 폴더</div>
-        <input id="folder-title-input" class="modal-input" placeholder="예: 302동 22층 바닥철근 검측" style="margin-bottom:16px">
+        <input id="folder-title-input" class="modal-input" placeholder="폴더 이름을 입력하세요" style="margin-bottom:16px">
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button onclick="closeCreateFolderModal()" class="btn-ghost">취소</button>
           <button onclick="submitCreateFolder()" class="btn-primary">만들기</button>
         </div>
       </div>
     </div>
+    <!-- 폴더 이름 수정 모달 -->
+    <div id="rename-folder-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+      <div style="background:var(--card);border-radius:16px;padding:24px;width:360px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+        <div style="font-size:15px;font-weight:700;margin-bottom:16px">폴더 이름 수정</div>
+        <input id="rename-folder-input" class="modal-input" placeholder="새 이름을 입력하세요" style="margin-bottom:16px">
+        <input type="hidden" id="rename-folder-id">
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button onclick="closeRenameFolderModal()" class="btn-ghost">취소</button>
+          <button onclick="submitRenameFolder()" class="btn-primary">저장</button>
+        </div>
+      </div>
+    </div>
   `;
   setTimeout(() => initFolderDrag(), 0);
+}
+
+function openRenameFolderModal(id, title) {
+  document.getElementById('rename-folder-id').value = id;
+  document.getElementById('rename-folder-input').value = title;
+  document.getElementById('rename-folder-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('rename-folder-input').focus(), 50);
+}
+
+function closeRenameFolderModal() {
+  document.getElementById('rename-folder-modal').style.display = 'none';
+}
+
+async function submitRenameFolder() {
+  const id = document.getElementById('rename-folder-id').value;
+  const title = document.getElementById('rename-folder-input').value.trim();
+  if(!title) return;
+  const { token } = getInspectionAuth();
+  await fetch(`${SUPABASE_URL}/rest/v1/inspection_folders?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title })
+  });
+  const folder = inspectionFolders.find(f => f.id === id);
+  if(folder) folder.title = title;
+  closeRenameFolderModal();
+  renderInspectionList(document.getElementById('main-content'));
 }
 
 function filterFolderList(q) {
