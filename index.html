@@ -3009,13 +3009,12 @@ function renderInspectionList(el) {
       ` : `
         <div style="display:grid;gap:10px" id="folder-list">
           ${inspectionFolders.map(f => `
-            <div class="drag-folder" data-id="${f.id}" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+            <div class="drag-folder" data-id="${f.id}" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 16px;display:flex;align-items:center;justify-content:space-between;">
               <div style="display:flex;align-items:center;gap:12px">
                 <span class="drag-handle" style="font-size:18px;cursor:grab;color:var(--muted);padding:0 4px" title="드래그로 순서 변경">⠿</span>
                 <span style="font-size:24px" onclick="openInspectionFolder('${f.id}')" style="cursor:pointer">📁</span>
                 <div onclick="openInspectionFolder('${f.id}')" style="cursor:pointer">
                   <div style="font-size:14px;font-weight:700;color:var(--text)">${f.title}</div>
-                  <div style="font-size:11px;color:var(--muted);margin-top:2px">${formatDate(f.created_at)}</div>
                 </div>
               </div>
               <div style="display:flex;gap:8px">
