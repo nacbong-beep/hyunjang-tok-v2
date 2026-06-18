@@ -1132,10 +1132,13 @@ function initCalMemo() {
       const memoHeight = calHeight - upcomingHeight - gap;
       if(memoHeight > 80) {
         memoPanel.style.height = memoHeight + 'px';
+        memoPanel.style.minHeight = memoHeight + 'px';
         inp.style.height = (memoHeight - 52) + 'px';
+        inp.style.minHeight = (memoHeight - 52) + 'px';
       }
     };
-    syncHeight();
+    setTimeout(syncHeight, 50);
+    setTimeout(syncHeight, 300);
     const observer = new ResizeObserver(syncHeight);
     observer.observe(calCol);
   }
