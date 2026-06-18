@@ -1120,22 +1120,12 @@ function initCalMemo() {
     clearTimeout(calMemoSaveTimer);
     calMemoSaveTimer = setTimeout(() => saveCalMemo(this.value), 1000);
   });
-  // 높이를 캘린더 그리드에 맞추기
+  // 우측 컬럼 높이를 캘린더에 맞추기
   const calCol = document.getElementById('cal-main-col');
-  const memoPanel = document.getElementById('cal-memo-panel');
-  if(calCol && memoPanel) {
+  const rightCol = document.getElementById('cal-right-col');
+  if(calCol && rightCol) {
     const syncHeight = () => {
-      const calHeight = calCol.offsetHeight;
-      const upcomingPanel = memoPanel.previousElementSibling;
-      const upcomingHeight = upcomingPanel ? upcomingPanel.offsetHeight : 0;
-      const gap = 12;
-      const memoHeight = calHeight - upcomingHeight - gap;
-      if(memoHeight > 80) {
-        memoPanel.style.height = memoHeight + 'px';
-        memoPanel.style.minHeight = memoHeight + 'px';
-        inp.style.height = (memoHeight - 52) + 'px';
-        inp.style.minHeight = (memoHeight - 52) + 'px';
-      }
+      rightCol.style.height = calCol.offsetHeight + 'px';
     };
     setTimeout(syncHeight, 50);
     setTimeout(syncHeight, 300);
@@ -1320,16 +1310,16 @@ function renderCalendarView(el) {
     </div>`;
 
   el.innerHTML = `
-    <div id="cal-layout" style="display:grid;grid-template-columns:77fr 23fr;gap:16px;align-items:stretch">
+    <div id="cal-layout" style="display:grid;grid-template-columns:77fr 23fr;gap:16px">
       <div id="cal-main-col">${calHTML}</div>
-      <div style="display:flex;flex-direction:column;gap:12px">
+      <div id="cal-right-col" style="display:flex;flex-direction:column;gap:12px">
         ${upcomingHTML}
-        <div class="panel" id="cal-memo-panel" style="flex:1;display:flex;flex-direction:column;min-height:120px">
+        <div class="panel" id="cal-memo-panel" style="display:flex;flex-direction:column;flex:1">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
             <div class="panel-title">📝 메모</div>
             <span id="cal-memo-status" style="font-size:10px;color:var(--muted)"></span>
           </div>
-          <textarea id="cal-memo-input" placeholder="자유롭게 메모하세요..." style="flex:1;width:100%;border:1px solid var(--border2);border-radius:8px;padding:10px;font-size:13px;background:var(--surface);color:var(--text);resize:none;outline:none;font-family:inherit;line-height:1.6;min-height:100px"></textarea>
+          <textarea id="cal-memo-input" placeholder="자유롭게 메모하세요..." style="flex:1;width:100%;border:1px solid var(--border2);border-radius:8px;padding:10px;font-size:13px;background:var(--surface);color:var(--text);resize:none;outline:none;font-family:inherit;line-height:1.6"></textarea>
         </div>
       </div>
     </div>
