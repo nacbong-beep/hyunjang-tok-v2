@@ -379,8 +379,15 @@ a{color:inherit;text-decoration:none}
       <button onclick="closeLibraryDoc()" style="border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">✕ 닫기</button>
     </div>
   </div>
-  <div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:20px">
-    <img id="lib-view-img" src="" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px">
+  <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:8px;background:rgba(0,0,0,.4);flex-shrink:0">
+    <button onclick="libZoom(-0.2)" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;width:32px;height:32px;font-size:18px;cursor:pointer;font-weight:700">−</button>
+    <span id="lib-zoom-label" style="color:#fff;font-size:13px;min-width:44px;text-align:center">100%</span>
+    <button onclick="libZoom(0.2)" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;width:32px;height:32px;font-size:18px;cursor:pointer;font-weight:700">+</button>
+    <button onclick="libZoomReset()" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;padding:0 10px;height:32px;font-size:12px;cursor:pointer">원본</button>
+    <button onclick="libZoomFit()" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;padding:0 10px;height:32px;font-size:12px;cursor:pointer">전체 맞춤</button>
+  </div>
+  <div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:20px" id="lib-view-scroll">
+    <img id="lib-view-img" src="" style="object-fit:contain;border-radius:8px;transform-origin:center;transition:transform .15s">
   </div>
 </div>
 
@@ -3815,6 +3822,32 @@ async function saveLibraryDoc() {
   btn.textContent = '저장'; btn.disabled = false;
 }
 
+let libZoomScale = 1;
+
+function libZoom(delta) {
+  libZoomScale = Math.max(0.2, Math.min(5, libZoomScale + delta));
+  const img = document.getElementById('lib-view-img');
+  if(img) img.style.transform = `scale(${libZoomScale})`;
+  const label = document.getElementById('lib-zoom-label');
+  if(label) label.textContent = Math.round(libZoomScale * 100) + '%';
+}
+
+function libZoomReset() {
+  libZoomScale = 1;
+  const img = document.getElementById('lib-view-img');
+  if(img) img.style.transform = 'scale(1)';
+  const label = document.getElementById('lib-zoom-label');
+  if(label) label.textContent = '100%';
+}
+
+function libZoomFit() {
+  libZoomScale = 1;
+  const img = document.getElementById('lib-view-img');
+  if(img) { img.style.transform = 'scale(1)'; img.style.maxWidth = '100%'; img.style.maxHeight = '100%'; }
+  const label = document.getElementById('lib-zoom-label');
+  if(label) label.textContent = '100%';
+}
+
 async function openLibraryDoc(id) {
   const doc = libraryDocs.find(d => d.id === id);
   if(!doc) return;
@@ -3826,6 +3859,7 @@ async function openLibraryDoc(id) {
     `${doc.category} · ${new Date(doc.created_at).toLocaleDateString('ko-KR')}${doc.memo?' · '+doc.memo:''}` +
     (doc.file_name ? `<span style="margin-left:8px;opacity:.6;font-size:11px">📎 ${doc.file_name}</span>` : '');
   document.getElementById('lib-view-img').src = '';
+  libZoomReset();
   document.getElementById('lib-view-delete').onclick = () => deleteLibraryDoc(doc.id, doc.file_path);
   const url = await getLibraryFileUrl(doc.file_path);
   if(url) document.getElementById('lib-view-img').src = url;
