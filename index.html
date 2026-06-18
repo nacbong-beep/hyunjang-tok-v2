@@ -1124,16 +1124,19 @@ function initCalMemo() {
   const calCol = document.getElementById('cal-main-col');
   const memoPanel = document.getElementById('cal-memo-panel');
   if(calCol && memoPanel) {
-    const observer = new ResizeObserver(() => {
+    const syncHeight = () => {
       const calHeight = calCol.offsetHeight;
       const upcomingPanel = memoPanel.previousElementSibling;
       const upcomingHeight = upcomingPanel ? upcomingPanel.offsetHeight : 0;
       const gap = 12;
       const memoHeight = calHeight - upcomingHeight - gap;
       if(memoHeight > 80) {
-        inp.style.minHeight = (memoHeight - 60) + 'px';
+        memoPanel.style.height = memoHeight + 'px';
+        inp.style.height = (memoHeight - 52) + 'px';
       }
-    });
+    };
+    syncHeight();
+    const observer = new ResizeObserver(syncHeight);
     observer.observe(calCol);
   }
 }
