@@ -1282,6 +1282,8 @@ function renderCalendarView(el) {
 }
 
 function drawRangeBarsInCell(y, mo, gridId='cal-grid-main') {
+  // 기존 기간 바 모두 제거 (중복 방지)
+  document.querySelectorAll(`#${gridId} .range-bar-item`).forEach(el => el.remove());
   const rangeEvents = customEvents.filter(e => e.endDate && e.endDate !== e.date && !/^(휴무|근무)/.test(e.title.trim()));
   if(!rangeEvents.length) return;
 
@@ -1318,6 +1320,7 @@ function drawRangeBarsInCell(y, mo, gridId='cal-grid-main') {
         const capLeft = isStart || isWeekStart;
         const capRight = isEnd || isWeekEnd;
         const bar = document.createElement('div');
+        bar.className = 'range-bar-item';
         bar.style.cssText = `
           display:block;
           margin-top:2px;
@@ -4266,7 +4269,7 @@ function openEventModal(dateStr) {
   document.getElementById('event-delete-btn').style.display = 'none';
   document.getElementById('event-type-single').checked = true;
   toggleEventDateType();
-  setTimeout(()=>selectEventColor(ev.color||'#3b82f6'), 50);
+  setTimeout(()=>selectEventColor(editingEvent?.color||'#3b82f6'), 50);
   document.getElementById('event-modal').style.display = 'flex';
   setTimeout(()=>document.getElementById('event-title-input').focus(), 100);
 }
