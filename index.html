@@ -1125,7 +1125,7 @@ function initCalMemo() {
   const rightCol = document.getElementById('cal-right-col');
   if(calCol && rightCol) {
     const syncHeight = () => {
-      rightCol.style.height = calCol.offsetHeight + 'px';
+      rightCol.style.height = (calCol.offsetHeight + 20) + 'px';
     };
     setTimeout(syncHeight, 50);
     setTimeout(syncHeight, 300);
