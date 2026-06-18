@@ -3123,10 +3123,15 @@ function renderInspectionList(el) {
                   <div style="font-size:14px;font-weight:700;color:var(--text)">${f.title}</div>
                 </div>
               </div>
-              <div style="display:flex;gap:8px">
-                <button onclick="event.stopPropagation();openRenameFolderModal('${f.id}','${f.title.replace(/'/g,"\'")}')" style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text)">수정</button>
+              <div style="display:flex;gap:8px;align-items:center">
                 <button onclick="event.stopPropagation();printInspectionFolder('${f.id}')" style="background:#0f766e;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">🖨️ 인쇄</button>
-                <button onclick="event.stopPropagation();confirmDeleteFolder('${f.id}','${f.title.replace(/'/g,"\'")}')" style="background:#fee2e2;color:#b91c1c;border:none;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer">삭제</button>
+                <div style="position:relative">
+                  <button onclick="event.stopPropagation();toggleFolderMenu('${f.id}')" style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;width:32px;height:32px;font-size:16px;cursor:pointer;color:var(--muted)">···</button>
+                  <div id="folder-menu-${f.id}" style="display:none;position:absolute;right:0;top:36px;background:var(--card);border:1px solid var(--border);border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.12);z-index:100;min-width:100px;overflow:hidden">
+                    <div onclick="event.stopPropagation();openRenameFolderModal('${f.id}','${f.title.replace(/'/g,"\'")}');toggleFolderMenu('${f.id}')" style="padding:10px 16px;font-size:13px;cursor:pointer;color:var(--text)" onmouseover="this.style.background='var(--surface)'" onmouseout="this.style.background=''">✏️ 수정</div>
+                    <div onclick="event.stopPropagation();confirmDeleteFolder('${f.id}','${f.title.replace(/'/g,"\'")}');toggleFolderMenu('${f.id}')" style="padding:10px 16px;font-size:13px;cursor:pointer;color:#ef4444;border-top:1px solid var(--border)" onmouseover="this.style.background='#fff0f0'" onmouseout="this.style.background=''">🗑️ 삭제</div>
+                  </div>
+                </div>
               </div>
             </div>
           `).join('')}
@@ -3158,6 +3163,22 @@ function renderInspectionList(el) {
     </div>
   `;
   setTimeout(() => initFolderDrag(), 0);
+}
+
+function toggleFolderMenu(id) {
+  // 다른 메뉴 닫기
+  document.querySelectorAll('[id^="folder-menu-"]').forEach(el => {
+    if(el.id !== 'folder-menu-' + id) el.style.display = 'none';
+  });
+  const menu = document.getElementById('folder-menu-' + id);
+  if(menu) menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  // 바깥 클릭 시 닫기
+  setTimeout(() => {
+    document.addEventListener('click', function closeMenu() {
+      document.querySelectorAll('[id^="folder-menu-"]').forEach(el => el.style.display = 'none');
+      document.removeEventListener('click', closeMenu);
+    });
+  }, 0);
 }
 
 function openRenameFolderModal(id, title) {
