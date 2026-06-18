@@ -1265,7 +1265,7 @@ function renderCalendarView(el) {
     </style>`;
 
   // 기간 일정 바 렌더링
-  setTimeout(() => drawRangeBarsInCell(y, mo, 'cal-grid-main'), 0);
+  requestAnimationFrame(() => drawRangeBarsInCell(y, mo, 'cal-grid-main'));
   // 검색창 상태 복원
   setTimeout(() => {
     const bar = document.getElementById('cal-search-bar');
