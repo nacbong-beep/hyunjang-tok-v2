@@ -2757,13 +2757,11 @@ function renderLibraryCatList() {
     const name = typeof cat === 'string' ? cat : cat.name;
     const children = (typeof cat === 'object' && cat.children) ? cat.children : [];
     return `
-    <div style="border:1px solid var(--border);border-radius:8px;background:var(--card);margin-bottom:4px;overflow:hidden">
+    <div class="lib-cat-item" data-idx="${i}" style="border:1px solid var(--border);border-radius:8px;background:var(--card);margin-bottom:4px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg)">
-        <span style="font-size:14px;color:var(--soft)">⠿</span>
+        <span class="lib-cat-handle" style="font-size:14px;color:var(--soft);cursor:grab;padding:0 2px">⠿</span>
         <input value="${name}" onchange="libCatDraft[${i}].name=this.value"
           style="flex:1;border:none;background:transparent;font-size:13px;font-weight:700;color:var(--text);outline:none;font-family:inherit">
-        <button onclick="moveLibraryCat(${i},-1)" ${i===0?'disabled':''} style="border:1px solid var(--border2);background:var(--card);border-radius:5px;width:22px;height:22px;font-size:10px;cursor:pointer;color:var(--muted)">↑</button>
-        <button onclick="moveLibraryCat(${i},1)" ${i===libCatDraft.length-1?'disabled':''} style="border:1px solid var(--border2);background:var(--card);border-radius:5px;width:22px;height:22px;font-size:10px;cursor:pointer;color:var(--muted)">↓</button>
         <button onclick="addChildCat(${i})" style="border:1px solid var(--border2);background:var(--card);border-radius:5px;width:22px;height:22px;font-size:10px;cursor:pointer;color:var(--muted)" title="하위 추가">+</button>
         <button onclick="deleteLibraryCat(${i})" style="border:1px solid #fecaca;background:#fff;color:#ef4444;border-radius:5px;width:22px;height:22px;font-size:10px;cursor:pointer">✕</button>
       </div>
@@ -2776,6 +2774,38 @@ function renderLibraryCatList() {
       </div>`).join('')}
     </div>`;
   }).join('');
+  // 드래그 초기화
+  initLibCatDrag();
+}
+
+function initLibCatDrag() {
+  const list = document.getElementById('lib-cat-list');
+  if(!list) return;
+  let dragging = null;
+  list.querySelectorAll('.lib-cat-item').forEach(el => {
+    el.draggable = true;
+    el.addEventListener('dragstart', e => {
+      dragging = el;
+      setTimeout(() => el.style.opacity = '0.4', 0);
+    });
+    el.addEventListener('dragend', e => {
+      el.style.opacity = '';
+      dragging = null;
+      // 순서 반영
+      const newOrder = [...list.querySelectorAll('.lib-cat-item')].map(d => parseInt(d.getAttribute('data-idx')));
+      const newDraft = newOrder.map(i => libCatDraft[i]);
+      libCatDraft = newDraft;
+    });
+    el.addEventListener('dragover', e => {
+      e.preventDefault();
+      if(dragging && dragging !== el) {
+        const rect = el.getBoundingClientRect();
+        const mid = rect.top + rect.height/2;
+        if(e.clientY < mid) list.insertBefore(dragging, el);
+        else list.insertBefore(dragging, el.nextSibling);
+      }
+    });
+  });
 }
 
 function addLibraryCat() {
