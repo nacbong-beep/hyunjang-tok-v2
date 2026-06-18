@@ -4019,18 +4019,26 @@ function popoutLibraryDoc() {
   doc.write('</div>');
   doc.close();
 
-  // 이벤트 연결
-  let scale = 1;
+  // 이벤트 연결 - onload 후 실행
   const win = libFloatWin;
-  function setZoom(s) {
-    scale = Math.max(0.1, Math.min(5, s));
-    win.document.getElementById('main-img').style.width = (scale * 100) + '%';
-    win.document.getElementById('zl').textContent = Math.round(scale * 100) + '%';
-  }
-  win.document.getElementById('zm').onclick = () => setZoom(scale - 0.2);
-  win.document.getElementById('zp').onclick = () => setZoom(scale + 0.2);
-  win.document.getElementById('zr').onclick = () => setZoom(1);
-  win.document.getElementById('zf').onclick = () => { win.document.getElementById('main-img').style.width = '100%'; scale = 1; win.document.getElementById('zl').textContent = '100%'; };
+  win.onload = function() {
+    let scale = 1;
+    function setZoom(s) {
+      scale = Math.max(0.1, Math.min(5, s));
+      win.document.getElementById('main-img').style.width = (scale * 100) + '%';
+      win.document.getElementById('zl').textContent = Math.round(scale * 100) + '%';
+    }
+    win.document.getElementById('zm').onclick = () => setZoom(scale - 0.2);
+    win.document.getElementById('zp').onclick = () => setZoom(scale + 0.2);
+    win.document.getElementById('zr').onclick = () => setZoom(1);
+    win.document.getElementById('zf').onclick = () => {
+      win.document.getElementById('main-img').style.width = '100%';
+      scale = 1;
+      win.document.getElementById('zl').textContent = '100%';
+    };
+  };
+  // 이미 로드된 경우 직접 실행
+  if(win.document.readyState === 'complete') win.onload();
   libFloatWin.focus();
 }
 
