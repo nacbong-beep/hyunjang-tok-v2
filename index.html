@@ -676,6 +676,8 @@ let selectedCategory = null;
 let sectionCollapsed = {찾아보기: true, 채팅방: false};
 let searchQuery = '';
 let calSearchQuery = '';
+let calMemoContent = '';
+let calMemoSaveTimer = null;
 let calSearchActive = false;
 let favoriteOnly = false;
 let editMode = false;
@@ -1078,6 +1080,64 @@ function calNav(dir) {
 }
 
 
+async function loadCalMemo() {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  let userId = null;
+  try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
+  if(!userId) return;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/calendar_memo?user_id=eq.${userId}&limit=1`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+  });
+  if(res.ok) {
+    const rows = await res.json();
+    calMemoContent = rows[0]?.content || '';
+    const inp = document.getElementById('cal-memo-input');
+    if(inp) inp.value = calMemoContent;
+  }
+}
+
+async function saveCalMemo(content) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  let userId = null;
+  try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
+  if(!userId) return;
+  const statusEl = document.getElementById('cal-memo-status');
+  if(statusEl) statusEl.textContent = '저장 중...';
+  await fetch(`${SUPABASE_URL}/rest/v1/calendar_memo`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' },
+    body: JSON.stringify({ user_id: userId, content, updated_at: new Date().toISOString() })
+  });
+  calMemoContent = content;
+  if(statusEl) { statusEl.textContent = '저장됨 ✓'; setTimeout(() => { if(statusEl) statusEl.textContent = ''; }, 2000); }
+}
+
+function initCalMemo() {
+  const inp = document.getElementById('cal-memo-input');
+  if(!inp) return;
+  inp.value = calMemoContent;
+  inp.addEventListener('input', function() {
+    clearTimeout(calMemoSaveTimer);
+    calMemoSaveTimer = setTimeout(() => saveCalMemo(this.value), 1000);
+  });
+  // 높이를 캘린더 그리드에 맞추기
+  const calCol = document.getElementById('cal-main-col');
+  const memoPanel = document.getElementById('cal-memo-panel');
+  if(calCol && memoPanel) {
+    const observer = new ResizeObserver(() => {
+      const calHeight = calCol.offsetHeight;
+      const upcomingPanel = memoPanel.previousElementSibling;
+      const upcomingHeight = upcomingPanel ? upcomingPanel.offsetHeight : 0;
+      const gap = 12;
+      const memoHeight = calHeight - upcomingHeight - gap;
+      if(memoHeight > 80) {
+        inp.style.minHeight = (memoHeight - 60) + 'px';
+      }
+    });
+    observer.observe(calCol);
+  }
+}
+
 function toggleCalSearch() {
   calSearchActive = !calSearchActive;
   const bar = document.getElementById('cal-search-bar');
@@ -1238,7 +1298,7 @@ function renderCalendarView(el) {
         <div class="panel-title">다가오는 일정</div>
         <button class="btn-primary" style="font-size:11px;padding:5px 10px" onclick="openEventModal('${todayKey()}')">+ 추가</button>
       </div>
-      ${[...getScheduleEvents(),...getUpcomingCustomEvents()].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,10).map(e=>{
+      ${[...getScheduleEvents(),...getUpcomingCustomEvents()].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6).map(e=>{
         const isOffDay=e.isCustom&&/^휴무/.test((e.title||'').trim());
         const borderColor=isOffDay?'#ef4444':e.isCustom?(e.color&&e.color!=='none'?e.color:'#3b82f6'):'#7c3aed';
         const dateColor=isOffDay?'#ef4444':e.isCustom?(e.color&&e.color!=='none'?e.color:'#3b82f6'):'#7c3aed';
@@ -1254,9 +1314,18 @@ function renderCalendarView(el) {
     </div>`;
 
   el.innerHTML = `
-    <div id="cal-layout" style="display:grid;grid-template-columns:77fr 23fr;gap:16px;align-items:start">
-      <div>${calHTML}</div>
-      <div>${upcomingHTML}</div>
+    <div id="cal-layout" style="display:grid;grid-template-columns:77fr 23fr;gap:16px;align-items:stretch">
+      <div id="cal-main-col">${calHTML}</div>
+      <div style="display:flex;flex-direction:column;gap:12px">
+        ${upcomingHTML}
+        <div class="panel" id="cal-memo-panel" style="flex:1;display:flex;flex-direction:column;min-height:120px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+            <div class="panel-title">📝 메모</div>
+            <span id="cal-memo-status" style="font-size:10px;color:var(--muted)"></span>
+          </div>
+          <textarea id="cal-memo-input" placeholder="자유롭게 메모하세요..." style="flex:1;width:100%;border:1px solid var(--border2);border-radius:8px;padding:10px;font-size:13px;background:var(--surface);color:var(--text);resize:none;outline:none;font-family:inherit;line-height:1.6;min-height:100px"></textarea>
+        </div>
+      </div>
     </div>
     <style>
       @media(max-width:500px){
@@ -1266,6 +1335,9 @@ function renderCalendarView(el) {
 
   // 기간 일정 바 렌더링
   requestAnimationFrame(() => drawRangeBarsInCell(y, mo, 'cal-grid-main'));
+  // 메모 로드 및 초기화
+  loadCalMemo().then(() => initCalMemo());
+  setTimeout(() => initCalMemo(), 100);
   // 검색창 상태 복원
   setTimeout(() => {
     const bar = document.getElementById('cal-search-bar');
