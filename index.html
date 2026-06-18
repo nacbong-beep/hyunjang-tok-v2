@@ -4023,19 +4023,17 @@ function popoutLibraryDoc() {
   const win = libFloatWin;
   win.onload = function() {
     let scale = 1;
+    const img = win.document.getElementById('main-img');
     function setZoom(s) {
-      scale = Math.max(0.1, Math.min(5, s));
-      win.document.getElementById('main-img').style.width = (scale * 100) + '%';
+      scale = Math.max(0.1, Math.min(10, s));
+      img.style.transform = 'scale(' + scale + ')';
+      img.style.transformOrigin = 'center center';
       win.document.getElementById('zl').textContent = Math.round(scale * 100) + '%';
     }
     win.document.getElementById('zm').onclick = () => setZoom(scale - 0.2);
     win.document.getElementById('zp').onclick = () => setZoom(scale + 0.2);
     win.document.getElementById('zr').onclick = () => setZoom(1);
-    win.document.getElementById('zf').onclick = () => {
-      win.document.getElementById('main-img').style.width = '100%';
-      scale = 1;
-      win.document.getElementById('zl').textContent = '100%';
-    };
+    win.document.getElementById('zf').onclick = () => setZoom(1);
   };
   // 이미 로드된 경우 직접 실행
   if(win.document.readyState === 'complete') win.onload();
