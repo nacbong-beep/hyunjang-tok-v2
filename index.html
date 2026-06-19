@@ -683,6 +683,8 @@ let selectedCategory = null;
 let sectionCollapsed = {찾아보기: true, 채팅방: false};
 let searchQuery = '';
 let calSearchQuery = '';
+let aiEngine = localStorage.getItem('hj_ai_engine') || 'claude'; // 'claude' or 'gemini'
+let geminiApiKey = localStorage.getItem('hj_gemini_key') || '';
 let calMemoContent = '';
 let calMemoSaveTimer = null;
 let calSearchActive = false;
@@ -2091,6 +2093,45 @@ function applyDateFilter(days) {
   const label = days==='all'?'전체':days+'일치';
   setFilteredText(filtered, label);
 }
+function setAiEngine(engine) {
+  aiEngine = engine;
+  localStorage.setItem('hj_ai_engine', engine);
+  renderSettingsView(document.getElementById('main-content'));
+}
+
+function saveGeminiKey() {
+  const key = document.getElementById('set-gemini-key').value.trim();
+  geminiApiKey = key;
+  localStorage.setItem('hj_gemini_key', key);
+  showToast('✅ Gemini API 키가 저장됐어요!');
+}
+
+async function aiClassifyGemini(text, roomName) {
+  if(!geminiApiKey) throw new Error('Gemini API 키를 설정해주세요. (설정 → AI 분류 엔진)');
+  const prompt = `다음은 건설 현장 카카오톡 대화입니다. 각 메시지를 분석하여 JSON 배열로 반환하세요.
+각 항목: {"tag":"태그","sender":"발신자","summary":"요약","content":"원본내용","messageDate":"YYYY-MM-DD또는null","eventDate":"YYYY-MM-DD또는null","isTodo":true/false}
+태그 종류: 일정, 지시사항, 공지사항, 안전, 타설, 검측, 자재, 기타
+날짜가 없으면 null. isTodo는 행동이 필요한 경우 true.
+JSON 배열만 반환하세요. 마크다운 없이.
+
+대화내용:
+${text}`;
+
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${geminiApiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.1 }
+    })
+  });
+  if(!res.ok) throw new Error('Gemini API 오류: ' + res.status);
+  const data = await res.json();
+  const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  const clean = raw.replace(/```json|```/g, '').trim();
+  return JSON.parse(clean);
+}
+
 async function aiClassify() {
   const text = document.getElementById('input-text').value.trim();
   const roomName = document.getElementById('input-room').value;
@@ -2104,20 +2145,23 @@ async function aiClassify() {
   hideError();
 
   try {
-    const response = await fetch('https://rjipklyccmwqodgdpbph.supabase.co/functions/v1/classify', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_KEY}`,
-      },
-      body: JSON.stringify({ text, roomName }),
-    });
-
-    if(!response.ok) throw new Error('서버 오류: ' + response.status);
-
-    const raw = await response.text();
-    const clean = raw.replace(/```json|```/g, '').trim();
-    const items = JSON.parse(clean);
+    let items;
+    if(aiEngine === 'gemini') {
+      items = await aiClassifyGemini(text, roomName);
+    } else {
+      const response = await fetch('https://rjipklyccmwqodgdpbph.supabase.co/functions/v1/classify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SUPABASE_KEY}`,
+        },
+        body: JSON.stringify({ text, roomName }),
+      });
+      if(!response.ok) throw new Error('서버 오류: ' + response.status);
+      const raw = await response.text();
+      const clean = raw.replace(/```json|```/g, '').trim();
+      items = JSON.parse(clean);
+    }
 
     if(!Array.isArray(items) || items.length===0) {
       showError('분류 결과가 없어요. 대화 내용을 확인해주세요.');
@@ -4095,6 +4139,28 @@ function renderSettingsView(el) {
   const cardLabels = {missed:'지시사항',calendar:'캘린더 일정',todo:'할일',notice:'공지사항'};
   el.innerHTML = `
     <div style="max-width:640px;display:flex;flex-direction:column;gap:16px">
+
+      <!-- AI 엔진 설정 -->
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">🤖 AI 분류 엔진</div></div>
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;gap:8px">
+            <button id="ai-btn-claude" onclick="setAiEngine('claude')" style="flex:1;padding:10px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${aiEngine==='claude'?'var(--primary)':'var(--border2)'};background:${aiEngine==='claude'?'#f0f0ff':'var(--surface)'};color:${aiEngine==='claude'?'var(--primary)':'var(--muted)'}">
+              Claude (기본)
+            </button>
+            <button id="ai-btn-gemini" onclick="setAiEngine('gemini')" style="flex:1;padding:10px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${aiEngine==='gemini'?'#1a73e8':'var(--border2)'};background:${aiEngine==='gemini'?'#e8f0fe':'var(--surface)'};color:${aiEngine==='gemini'?'#1a73e8':'var(--muted)'}">
+              Gemini (테스트)
+            </button>
+          </div>
+          <div id="gemini-key-section" style="display:${aiEngine==='gemini'?'block':'none'}">
+            <label class="field-label">Gemini API 키
+              <input class="field-control" id="set-gemini-key" placeholder="AIza..." value="${geminiApiKey}" type="password">
+            </label>
+            <button class="btn-primary" style="margin-top:8px" onclick="saveGeminiKey()">저장</button>
+          </div>
+          <div style="font-size:11px;color:var(--muted)">현재: ${aiEngine==='claude'?'Claude Haiku (Supabase Edge Function)':'Gemini Flash (직접 호출)'}</div>
+        </div>
+      </div>
 
       <!-- 현장/프로필 정보 -->
       <div class="panel">
