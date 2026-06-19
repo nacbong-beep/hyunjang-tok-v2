@@ -774,18 +774,30 @@ function renderSidebar() {
     .filter(r => !favoriteOnly || r.favorite)
     .sort((a,b) => Number(b.favorite)-Number(a.favorite)||a.sortOrder-b.sortOrder);
 
+  const menuDefs = {
+    dashboard: {icon:'📊', label:'대시보드'},
+    calendar: {icon:'📅', label:'캘린더', count: calEvents.length},
+    weekly: {icon:'📋', label:'주간업무일지'},
+    library: {icon:'📊', label:'공정표 관리'},
+    drawing: {icon:'📐', label:'도면 관리'},
+    construction: {icon:'🏗️', label:'시공 관리'},
+    inspection: {icon:'📋', label:'검측요청서'},
+    todo: {icon:'✅', label:'할일', count: pending},
+    settings: {icon:'⚙️', label:'설정'},
+  };
+  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','todo','settings'];
+  const menuOrder = (appSettings.menuOrder && appSettings.menuOrder.length === defaultOrder.length)
+    ? appSettings.menuOrder
+    : defaultOrder;
+
   nav.innerHTML = `
     <div class="nav-section">
       <div class="nav-label">메뉴</div>
-      ${navItem('📊','대시보드','dashboard')}
-      ${navItem('📅','캘린더','calendar',calEvents.length)}
-      ${navItem('📋','주간업무일지','weekly')}
-      ${navItem('📊','공정표 관리','library')}
-      ${navItem('📐','도면 관리','drawing')}
-      ${navItem('🏗️','시공 관리','construction')}
-      ${navItem('📋','검측요청서','inspection')}
-      ${navItem('✅','할일','todo',pending)}
-      ${navItem('⚙️','설정','settings')}
+      ${menuOrder.map(key => {
+        const m = menuDefs[key];
+        if(!m) return '';
+        return navItem(m.icon, m.label, key, m.count);
+      }).join('')}
       <div class="nav-item ${currentView==='search'?'active':''}" onclick="setView('search')" style="margin:4px 0;border:1px solid rgba(255,255,255,.12);border-radius:9px">
         <span class="nav-icon">🔍</span>
         <span>검색</span>
@@ -4178,6 +4190,13 @@ function renderSettingsView(el) {
   el.innerHTML = `
     <div style="max-width:640px;display:flex;flex-direction:column;gap:16px">
 
+      <!-- 사이드바 메뉴 순서 -->
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">📑 사이드바 메뉴 순서</div></div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">⠿ 핸들을 드래그해서 순서를 바꿀 수 있어요</div>
+        <div id="menu-order-list" style="display:flex;flex-direction:column;gap:4px"></div>
+      </div>
+
       <!-- AI 엔진 설정 -->
       <div class="panel">
         <div class="panel-head"><div class="panel-title">🤖 AI 분류 엔진</div></div>
@@ -4275,6 +4294,72 @@ function renderSettingsView(el) {
       </div>
 
     </div>`;
+  initMenuOrderList();
+}
+
+function initMenuOrderList() {
+  const menuDefs = {
+    dashboard: {icon:'📊', label:'대시보드'},
+    calendar: {icon:'📅', label:'캘린더'},
+    weekly: {icon:'📋', label:'주간업무일지'},
+    library: {icon:'📊', label:'공정표 관리'},
+    drawing: {icon:'📐', label:'도면 관리'},
+    construction: {icon:'🏗️', label:'시공 관리'},
+    inspection: {icon:'📋', label:'검측요청서'},
+    todo: {icon:'✅', label:'할일'},
+    settings: {icon:'⚙️', label:'설정'},
+  };
+  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','todo','settings'];
+  let order = (appSettings.menuOrder && appSettings.menuOrder.length === defaultOrder.length)
+    ? [...appSettings.menuOrder]
+    : [...defaultOrder];
+
+  const list = document.getElementById('menu-order-list');
+  if(!list) return;
+
+  function render() {
+    list.innerHTML = order.map(key => {
+      const m = menuDefs[key];
+      if(!m) return '';
+      return `<div class="menu-order-item" data-key="${key}" style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
+        <span style="font-size:16px;color:var(--soft);cursor:grab">⠿</span>
+        <span style="font-size:14px">${m.icon}</span>
+        <span style="font-size:13px;font-weight:600;color:var(--text)">${m.label}</span>
+      </div>`;
+    }).join('');
+    attachDrag();
+  }
+
+  function attachDrag() {
+    let dragging = null;
+    list.querySelectorAll('.menu-order-item').forEach(el => {
+      el.draggable = true;
+      el.addEventListener('dragstart', () => {
+        dragging = el;
+        setTimeout(() => el.style.opacity = '0.4', 0);
+      });
+      el.addEventListener('dragend', async () => {
+        el.style.opacity = '';
+        dragging = null;
+        order = [...list.querySelectorAll('.menu-order-item')].map(d => d.getAttribute('data-key'));
+        appSettings.menuOrder = order;
+        await saveSettingsToSupabase();
+        renderSidebar();
+        showToast('✅ 메뉴 순서가 저장됐어요');
+      });
+      el.addEventListener('dragover', e => {
+        e.preventDefault();
+        if(dragging && dragging !== el) {
+          const rect = el.getBoundingClientRect();
+          const mid = rect.top + rect.height/2;
+          if(e.clientY < mid) list.insertBefore(dragging, el);
+          else list.insertBefore(dragging, el.nextSibling);
+        }
+      });
+    });
+  }
+
+  render();
 }
 
 function saveProfileSettings() {
