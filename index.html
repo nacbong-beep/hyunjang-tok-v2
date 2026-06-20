@@ -711,7 +711,6 @@ let appSettings = JSON.parse(localStorage.getItem('hj3_settings') || JSON.string
   showHoliday: true,   // 공휴일 표시
   missedDays: 1,       // 놓친 지시사항 기준일
   upcomingDays: 7,     // 다가오는 일정 표시 범위
-  dashboardCards: ['notice','missed','calendar','todo'], // 카드 순서
 }));
 
 // ===== 유틸 =====
@@ -933,21 +932,61 @@ function renderDashboard(el) {
   });
   const calEvents = getCalendarEvents();
   const pending = todos.filter(t=>!t.done);
+  const overdueTodos = pending.filter(t=>t.dueDate && t.dueDate < todayKey());
   const tomorrowTodos = pending.filter(t=>t.dueDate===addDaysKey(1));
   const weekTodos = pending.filter(t=>t.dueDate&&t.dueDate!==addDaysKey(1)&&t.dueDate>=todayKey()&&t.dueDate<=addDaysKey(7));
 
-  const cardMap = {
-    missed: `<div class="summary-card missed" onclick="setView('cat_지시사항')"><div class="summary-card-icon">📋</div><div class="card-label">지시사항 (${missedDays===1?'오늘':'최근'+missedDays+'일'})</div><div class="card-num">${missedInstr.length}</div><div class="card-hint">확인 또는 후속 조치 필요</div></div>`,
-    calendar: `<div class="summary-card calendar" onclick="setView('calendar')"><div class="summary-card-icon">📅</div><div class="card-label">캘린더 일정</div><div class="card-num">${calEvents.length}</div><div class="card-hint">내일·이번 주 일정 포함</div></div>`,
-    todo: `<div class="summary-card todo" onclick="setView('todo')"><div class="summary-card-icon">✅</div><div class="card-label">할일</div><div class="card-num">${pending.length}</div><div class="card-hint">내일 ${tomorrowTodos.length}건 · 이번 주 ${weekTodos.length}건</div></div>`,
-    notice: `<div class="summary-card notice" onclick="setView('cat_공지사항')"><div class="summary-card-icon">📢</div><div class="card-label">공지사항</div><div class="card-num">${notices.length}</div><div class="card-hint">회의·전달사항 포함</div></div>`,
-  };
-  const cards = (appSettings.dashboardCards||['missed','calendar','todo','notice']).map(c=>cardMap[c]||'').join('');
+  // ===== 오늘의 브리핑: 진짜 처리 필요한 것 위주로 추려서 보여줌 =====
+  const briefingItems = [];
+  if(overdueTodos.length) {
+    const t = overdueTodos[0];
+    briefingItems.push({
+      icon:'⚠️', color:'#dc2626', bg:'#fef2f2',
+      text:`${(t.title||'할일')}${overdueTodos.length>1?` 외 ${overdueTodos.length-1}건`:''}`,
+      tag:'기한 지남', onclick:"setView('todo')"
+    });
+  }
+  if(missedInstr.length) {
+    const m = missedInstr[0];
+    briefingItems.push({
+      icon:'📋', color:'#b45309', bg:'#fffbeb',
+      text:`${(m.summary||m.content||'지시사항')}${missedInstr.length>1?` 외 ${missedInstr.length-1}건`:''}`,
+      tag:'확인 필요', onclick:"setView('cat_지시사항')"
+    });
+  }
+  const upcomingEvent = calEvents.find(e => e.date >= todayKey() && e.date <= addDaysKey(1));
+  if(upcomingEvent) {
+    const dayLabel = upcomingEvent.date === todayKey() ? '오늘' : '내일';
+    briefingItems.push({
+      icon:'📅', color:'#1d4ed8', bg:'#eff6ff',
+      text:`${upcomingEvent.title||''}`,
+      tag:`${dayLabel} ${upcomingEvent.date.slice(5)}`, onclick:"setView('calendar')"
+    });
+  }
+  const briefingSummary = briefingItems.length
+    ? `오늘 확인하실 게 ${briefingItems.length}가지예요.`
+    : `오늘은 특별히 급하게 처리할 일이 없어요 👍`;
+
+  const briefingHtml = `
+    <div style="background:linear-gradient(135deg,#eff6ff,#f5f3ff);border:1px solid #dbeafe;border-radius:var(--radius);padding:18px 20px;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <span style="font-size:13px;font-weight:700;color:#3730a3">✨ 오늘의 브리핑</span>
+      </div>
+      <p style="font-size:15px;line-height:1.6;margin:0 0 ${briefingItems.length?'14px':'0'};color:var(--text);font-weight:500">${briefingSummary}</p>
+      ${briefingItems.length ? `<div style="display:flex;flex-direction:column;gap:8px">
+        ${briefingItems.map(i => `
+          <div onclick="${i.onclick}" style="display:flex;align-items:center;gap:10px;background:var(--card);border-radius:10px;padding:10px 12px;cursor:pointer">
+            <span style="font-size:16px">${i.icon}</span>
+            <span style="font-size:13px;color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${i.text}</span>
+            <span style="font-size:11px;font-weight:700;color:${i.color};background:${i.bg};padding:3px 9px;border-radius:20px;white-space:nowrap">${i.tag}</span>
+          </div>`).join('')}
+      </div>` : ''}
+    </div>`;
 
   el.innerHTML = `
     <div class="dashboard-layout">
       <div class="dashboard-left">
-        <div class="dashboard-summary">${cards}</div>
+        ${briefingHtml}
         <div class="dashboard-grid-2">
           <div class="panel">
             <div class="panel-head"><div class="panel-title">공지사항</div><button class="panel-link" onclick="setView('cat_공지사항')">전체 →</button></div>
@@ -4525,7 +4564,6 @@ function popoutLibraryDoc() {
 }
 
 function renderSettingsView(el) {
-  const cardLabels = {missed:'지시사항',calendar:'캘린더 일정',todo:'할일',notice:'공지사항'};
   el.innerHTML = `
     <div style="max-width:640px;display:flex;flex-direction:column;gap:16px">
 
@@ -4607,18 +4645,6 @@ function renderSettingsView(el) {
               <option value="7" ${appSettings.missedDays===7?'selected':''}>최근 1주일</option>
             </select>
           </label>
-          <div>
-            <div class="field-label" style="margin-bottom:8px">대시보드 카드 순서 (드래그)</div>
-            <div id="card-order-list" style="display:flex;flex-direction:column;gap:6px">
-              ${appSettings.dashboardCards.map((c,i)=>`
-                <div draggable="true" data-card="${c}" ondragstart="dragCard(event,'${c}')" ondragover="event.preventDefault()" ondrop="dropCard(event,'${c}')"
-                  style="display:flex;align-items:center;gap:10px;padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--card);cursor:grab">
-                  <span style="font-size:16px">⠿</span>
-                  <span style="font-size:13px;font-weight:700">${cardLabels[c]||c}</span>
-                  <span style="margin-left:auto;font-size:11px;color:var(--soft)">${i+1}번째</span>
-                </div>`).join('')}
-            </div>
-          </div>
         </div>
       </div>
 
@@ -4722,21 +4748,6 @@ function saveDashSettings() {
   showToast('✅ 저장됐어요!');
 }
 
-// 카드 순서 드래그
-let dragSrc = null;
-function dragCard(e, card) { dragSrc = card; }
-function dropCard(e, target) {
-  if(dragSrc===target) return;
-  const cards = [...appSettings.dashboardCards];
-  const from = cards.indexOf(dragSrc);
-  const to = cards.indexOf(target);
-  cards.splice(from,1);
-  cards.splice(to,0,dragSrc);
-  appSettings.dashboardCards = cards;
-  save();
-  renderSettingsView(document.getElementById('main-content'));
-  showToast('✅ 카드 순서가 변경됐어요!');
-}
 function getUpcomingCustomEvents() {
   const today = todayKey();
   const limit = addDaysKey(appSettings.upcomingDays||7);
