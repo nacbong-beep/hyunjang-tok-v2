@@ -386,8 +386,8 @@ a{color:inherit;text-decoration:none}
     <button onclick="libZoomReset()" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;padding:0 10px;height:32px;font-size:12px;cursor:pointer">원본</button>
     <button onclick="libZoomFit()" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;padding:0 10px;height:32px;font-size:12px;cursor:pointer">전체 맞춤</button>
   </div>
-  <div style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:20px" id="lib-view-scroll">
-    <img id="lib-view-img" src="" style="object-fit:contain;border-radius:8px;transform-origin:center;transition:transform .15s">
+  <div style="flex:1;overflow:auto;display:flex;padding:20px" id="lib-view-scroll">
+    <img id="lib-view-img" src="" style="object-fit:contain;border-radius:8px;transform-origin:center;transition:transform .15s;margin:auto">
   </div>
 </div>
 
@@ -4275,7 +4275,7 @@ function popoutLibraryDoc() {
   doc.write('* { box-sizing:border-box; margin:0; padding:0; }');
   doc.write('body { background:#1a2332; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; overflow:hidden; }');
   doc.write('.header { background:#263448; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }');
-  doc.write('.img-wrap { flex:1; overflow:auto; display:flex; align-items:center; justify-content:center; padding:12px; }');
+  doc.write('.img-wrap { flex:1; overflow:auto; display:flex; padding:12px; }');
   doc.write('.zoom-bar { background:#263448; padding:8px 14px; display:flex; gap:8px; align-items:center; justify-content:center; flex-shrink:0; }');
   doc.write('button { border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.1); color:#fff; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }');
   doc.write('button:hover { background:rgba(255,255,255,.3); }');
@@ -4284,7 +4284,7 @@ function popoutLibraryDoc() {
   doc.write('<div><div style="color:#fff;font-size:13px;font-weight:700">' + title + '</div>');
   doc.write('<div style="color:rgba(255,255,255,.5);font-size:11px;margin-top:2px">' + meta + '</div></div>');
   doc.write('<div style="color:rgba(255,255,255,.4);font-size:11px">창 크기를 자유롭게 조절하세요</div></div>');
-  doc.write('<div class="img-wrap"><img id="main-img" src="' + imgSrc + '" style="width:100%;height:auto;border-radius:6px;cursor:zoom-in"></div>');
+  doc.write('<div class="img-wrap"><img id="main-img" src="' + imgSrc + '" style="width:100%;height:auto;border-radius:6px;cursor:zoom-in;margin:auto"></div>');
   doc.write('<div class="zoom-bar">');
   doc.write('<button id="zm">🔍 −</button>');
   doc.write('<span id="zl" style="color:rgba(255,255,255,.7);font-size:12px;min-width:44px;text-align:center">100%</span>');
