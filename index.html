@@ -4110,7 +4110,7 @@ function libZoom(delta) {
 function libZoomReset() {
   libZoomScale = 1;
   const img = document.getElementById('lib-view-img');
-  if(img) img.style.transform = 'scale(1)';
+  if(img) { img.style.transform = 'scale(1)'; img.style.maxWidth = 'none'; img.style.maxHeight = 'none'; }
   const label = document.getElementById('lib-zoom-label');
   if(label) label.textContent = '100%';
 }
@@ -4134,7 +4134,7 @@ async function openLibraryDoc(id) {
     `${doc.category} · ${new Date(doc.created_at).toLocaleDateString('ko-KR')}${doc.memo?' · '+doc.memo:''}` +
     (doc.file_name ? `<span style="margin-left:8px;opacity:.6;font-size:11px">📎 ${doc.file_name}</span>` : '');
   document.getElementById('lib-view-img').src = '';
-  libZoomReset();
+  libZoomFit();
   document.getElementById('lib-view-delete').onclick = () => deleteLibraryDoc(doc.id, doc.file_path);
   const url = await getLibraryFileUrl(doc.file_path);
   if(url) document.getElementById('lib-view-img').src = url;
