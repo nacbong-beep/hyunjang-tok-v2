@@ -1678,21 +1678,23 @@ async function loadAiSearchWeeklyData() {
 
 function aiSearchGatherContext(question) {
   const keywords = aiSearchExtractKeywords(question);
-  const hasMatch = (str) => { str = str || ''; return keywords.some(k => str.includes(k)); };
   const matchScore = (str) => { str = str || ''; return keywords.filter(k => str.includes(k)).length; };
 
-  const relMsgs = messages.filter(m => hasMatch([m.summary, m.content, m.tag, m.roomName].join(' '))).slice(0, 30);
-  const relEvents = customEvents.filter(e => hasMatch([e.title, e.memo, e.tag].join(' '))).slice(0, 20);
-  const relWeekly = (aiSearchWeeklyCache || []).filter(r => hasMatch([r.row_name, r.content].join(' '))).slice(0, 15);
-  const relFolders = (typeof inspectionFolders !== 'undefined' ? inspectionFolders : []).filter(f => hasMatch(f.title || '')).slice(0, 5);
+  // 키워드와 더 많이 겹치는 항목을 우선시하고, 키워드가 여러 개인데 2개 이상 겹친 게 있으면
+  // 1개만 우연히 겹친 노이즈성 항목은 제외 (예: "확인", "기준" 같은 흔한 단어 하나만 겹쳐서 끌려오는 것 방지)
+  function rank(items, scoreFn, cap) {
+    const scored = items.map(item => ({ item, score: scoreFn(item) })).filter(x => x.score > 0);
+    const strong = scored.filter(x => x.score >= 2);
+    const pool = (keywords.length >= 2 && strong.length) ? strong : scored;
+    return pool.sort((a, b) => b.score - a.score).slice(0, cap).map(x => x.item);
+  }
+
+  const relMsgs = rank(messages, m => matchScore([m.summary, m.content, m.tag, m.roomName].join(' ')), 30);
+  const relEvents = rank(customEvents, e => matchScore([e.title, e.memo, e.tag].join(' ')), 20);
+  const relWeekly = rank(aiSearchWeeklyCache || [], r => matchScore([r.row_name, r.content].join(' ')), 15);
+  const relFolders = rank(typeof inspectionFolders !== 'undefined' ? inspectionFolders : [], f => matchScore(f.title || ''), 5);
   const docPool = (typeof inspectionDocs !== 'undefined' && inspectionDocs.length) ? inspectionDocs : libraryDocs;
-  // 단순 최신순이 아니라, 키워드와 더 많이 일치하는 문서(예: 제목+카테고리 둘 다 매칭)를 우선 선택
-  const relDocs = docPool
-    .map(d => ({ doc: d, score: matchScore([d.title, d.category, d.memo].join(' ')) }))
-    .filter(x => x.score > 0)
-    .sort((a, b) => b.score - a.score || new Date(b.doc.created_at||0) - new Date(a.doc.created_at||0))
-    .slice(0, 4) // 이미지 비용 고려 최대 4장
-    .map(x => x.doc);
+  const relDocs = rank(docPool, d => matchScore([d.title, d.category, d.memo].join(' ')), 4); // 이미지 비용 고려 최대 4장
 
   return { relMsgs, relEvents, relWeekly, relFolders, relDocs };
 }
