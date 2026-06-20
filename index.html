@@ -801,6 +801,10 @@ function renderSidebar() {
         <span class="nav-icon">🔍</span>
         <span>검색</span>
       </div>
+      <div class="nav-item ${currentView==='ai_search'?'active':''}" onclick="setView('ai_search')" style="margin:4px 0;border:1px solid rgba(167,139,250,.4);border-radius:9px;background:${currentView==='ai_search'?'rgba(167,139,250,.18)':'transparent'}">
+        <span class="nav-icon">🤖</span>
+        <span>AI 검색</span>
+      </div>
     </div>
     <div class="nav-section">
       <div class="nav-label nav-collapsible" onclick="toggleSection('찾아보기')">
@@ -837,7 +841,7 @@ function setView(v) {
   currentView = v;
   closeSidebar();
   if(v.startsWith('cat_')) { selectedCategory=v.replace('cat_',''); currentView='search'; }
-  const titles = {dashboard:'대시보드',calendar:'캘린더',weekly:'주간업무일지',library:'공정표 관리',drawing:'도면 관리',construction:'시공 관리',inspection:'검측요청서',todo:'할일',search:'검색',input:'메시지 입력',settings:'설정'};
+  const titles = {dashboard:'대시보드',calendar:'캘린더',weekly:'주간업무일지',library:'공정표 관리',drawing:'도면 관리',construction:'시공 관리',inspection:'검측요청서',todo:'할일',search:'검색',ai_search:'AI 검색',input:'메시지 입력',settings:'설정'};
   document.getElementById('header-title').textContent = titles[v]||(v.startsWith('cat_')?v.replace('cat_','')+'  검색':v);
   const guideEl = document.getElementById('header-guide');
   if(guideEl) guideEl.style.display = (currentView==='dashboard') ? 'block' : 'none';
@@ -847,6 +851,7 @@ function setView(v) {
   else if(currentView==='calendar') renderCalendarView(el);
   else if(currentView==='todo') renderTodoView(el);
   else if(currentView==='search') renderSearchView(el);
+  else if(currentView==='ai_search') renderAiSearchView(el);
   else if(currentView==='input') renderInputView(el);
   else if(currentView==='weekly') renderWeeklyView(el);
   else if(currentView==='library') renderLibraryView(el, 'library');
@@ -923,7 +928,7 @@ function dashboardAiSearchSubmit(value) {
   const q = (value||'').trim();
   if(!q) return;
   pendingAiSearchQuery = q;
-  setView('search');
+  setView('ai_search');
 }
 
 function renderDashboard(el) {
@@ -1577,23 +1582,6 @@ function renderSearchView(el) {
   if(!el.querySelector('.search-wrap')) {
     el.innerHTML = `
       <div class="search-wrap">
-        <div style="background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:14px;padding:14px;margin-bottom:14px">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-            <span style="font-size:13px;font-weight:700;color:#6d28d9">🤖 AI에게 물어보기</span>
-            <span style="font-size:11px;color:#8b5cf6">메시지·일정·도면을 분석해서 답변해요</span>
-            <button onclick="aiSearchReset()" style="margin-left:auto;background:transparent;border:1px solid #c4b5fd;color:#7c3aed;border-radius:7px;padding:3px 10px;font-size:11px;cursor:pointer;font-weight:700">🔄 새 대화</button>
-          </div>
-          <div style="display:flex;gap:8px">
-            <input id="ai-search-input" class="search-input" placeholder="예: 지하2층 주차장 바닥 마감두께 얼마야?" style="flex:1;border-color:#c4b5fd">
-            <button id="ai-search-btn" onclick="runAiSearch()" style="background:#7c3aed;color:#fff;border:none;border-radius:9px;padding:0 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">질문하기</button>
-          </div>
-          <div id="ai-search-answer" style="max-height:420px;overflow-y:auto"></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;margin:4px 0 12px;color:var(--muted);font-size:11px">
-          <div style="flex:1;height:1px;background:var(--border)"></div>
-          또는 키워드로 빠르게 찾기
-          <div style="flex:1;height:1px;background:var(--border)"></div>
-        </div>
         <input id="search-main-input" class="search-input" placeholder="키워드, 발신자, 요약 검색...">
       </div>
       <div id="search-results-panel"></div>`;
@@ -1603,12 +1591,41 @@ function renderSearchView(el) {
       searchQuery = this.value;
       updateSearchResults();
     });
+    setTimeout(() => inp.focus(), 50);
+  }
+  updateSearchResults();
+}
+
+// ===== AI 검색 페이지 (Gemini, 텍스트+도면 이미지 분석) =====
+function renderAiSearchView(el) {
+  if(!el.querySelector('.ai-search-wrap')) {
+    el.innerHTML = `
+      <div class="ai-search-wrap" style="max-width:760px;margin:0 auto">
+        <div style="background:linear-gradient(135deg,#f0ebfe,#e8edfd);border:1.5px solid #c4b5fd;border-radius:14px;padding:18px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+            <span style="font-size:14px;font-weight:700;color:#6d28d9">🤖 AI에게 물어보기</span>
+            <span style="font-size:12px;color:#8b5cf6">메시지·일정·주간업무일지·도면을 분석해서 답변해요</span>
+            <button onclick="aiSearchReset()" style="margin-left:auto;background:transparent;border:1px solid #c4b5fd;color:#7c3aed;border-radius:7px;padding:4px 12px;font-size:12px;cursor:pointer;font-weight:700">🔄 새 대화</button>
+          </div>
+          <div style="display:flex;gap:8px">
+            <input id="ai-search-input" class="search-input" placeholder="예: 지하2층 주차장 바닥 마감두께 얼마야?" style="flex:1;border-color:#c4b5fd">
+            <button id="ai-search-btn" onclick="runAiSearch()" style="background:#7c3aed;color:#fff;border:none;border-radius:9px;padding:0 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">질문하기</button>
+          </div>
+          <div id="ai-search-answer" style="margin-top:10px;padding-top:2px"></div>
+        </div>
+      </div>`;
     const aiInp = el.querySelector('#ai-search-input');
     aiInp.addEventListener('keydown', function(e) { if(e.key === 'Enter') runAiSearch(); });
-    setTimeout(() => inp.focus(), 50);
+    setTimeout(() => aiInp.focus(), 50);
     // 도면/문서 자료를 AI 검색이 참고할 수 있도록 미리 로드 (이미 로드돼 있으면 생략)
     if(typeof inspectionDocs !== 'undefined' && inspectionDocs.length === 0) {
       loadAllLibraryDocs().catch(e => console.warn('문서 로드 실패', e));
+    }
+    if(typeof inspectionFolders !== 'undefined' && inspectionFolders.length === 0) {
+      loadInspectionFolders().catch(e => console.warn('검측요청서 폴더 로드 실패', e));
+    }
+    if(aiSearchWeeklyCache === null) {
+      loadAiSearchWeeklyData();
     }
     // 저장된 AI 검색 대화 불러오기 (이전 세션에서 이어서 질문 가능하도록)
     loadAiSearchHistory().then(history => {
@@ -1629,7 +1646,6 @@ function renderSearchView(el) {
       answerEl.scrollTop = answerEl.scrollHeight;
     }).catch(e => console.warn('AI 검색 히스토리 로드 실패', e));
   }
-  updateSearchResults();
 
   // 대시보드에서 질문을 입력하고 넘어온 경우, 자동으로 채워서 실행
   if(pendingAiSearchQuery) {
@@ -1643,19 +1659,41 @@ function renderSearchView(el) {
 
 // ===== AI 검색 (Gemini, 텍스트+도면 이미지 분석) =====
 function aiSearchExtractKeywords(q) {
-  return q.replace(/[?!.,~()]/g, ' ').split(/\s+/).map(w => w.trim()).filter(w => w.length >= 2);
+  // 영문/숫자와 한글이 붙어있으면 띄어서 분리 (예: "ALC검측" -> "ALC 검측", "302동검측" -> "302동 검측")
+  const spaced = q
+    .replace(/([a-zA-Z0-9])([가-힣])/g, '$1 $2')
+    .replace(/([가-힣])([a-zA-Z0-9])/g, '$1 $2');
+  return spaced.replace(/[?!.,~()]/g, ' ').split(/\s+/).map(w => w.trim()).filter(w => w.length >= 2);
+}
+
+let aiSearchWeeklyCache = null; // 주간업무일지 검색용 캐시 (지연 로드)
+
+async function loadAiSearchWeeklyData() {
+  try {
+    const rows = await sbFetch('weekly_report', 'GET', null, '?select=row_name,date_key,content&order=date_key.desc&limit=500');
+    aiSearchWeeklyCache = rows || [];
+  } catch(e) { console.warn('주간업무일지 로드 실패', e); aiSearchWeeklyCache = []; }
 }
 
 function aiSearchGatherContext(question) {
   const keywords = aiSearchExtractKeywords(question);
   const hasMatch = (str) => { str = str || ''; return keywords.some(k => str.includes(k)); };
+  const matchScore = (str) => { str = str || ''; return keywords.filter(k => str.includes(k)).length; };
 
   const relMsgs = messages.filter(m => hasMatch([m.summary, m.content, m.tag, m.roomName].join(' '))).slice(0, 30);
   const relEvents = customEvents.filter(e => hasMatch([e.title, e.memo, e.tag].join(' '))).slice(0, 20);
+  const relWeekly = (aiSearchWeeklyCache || []).filter(r => hasMatch([r.row_name, r.content].join(' '))).slice(0, 15);
+  const relFolders = (typeof inspectionFolders !== 'undefined' ? inspectionFolders : []).filter(f => hasMatch(f.title || '')).slice(0, 5);
   const docPool = (typeof inspectionDocs !== 'undefined' && inspectionDocs.length) ? inspectionDocs : libraryDocs;
-  const relDocs = docPool.filter(d => hasMatch([d.title, d.category, d.memo].join(' '))).slice(0, 4); // 이미지 비용 고려 최대 4장
+  // 단순 최신순이 아니라, 키워드와 더 많이 일치하는 문서(예: 제목+카테고리 둘 다 매칭)를 우선 선택
+  const relDocs = docPool
+    .map(d => ({ doc: d, score: matchScore([d.title, d.category, d.memo].join(' ')) }))
+    .filter(x => x.score > 0)
+    .sort((a, b) => b.score - a.score || new Date(b.doc.created_at||0) - new Date(a.doc.created_at||0))
+    .slice(0, 4) // 이미지 비용 고려 최대 4장
+    .map(x => x.doc);
 
-  return { relMsgs, relEvents, relDocs };
+  return { relMsgs, relEvents, relWeekly, relFolders, relDocs };
 }
 
 function aiSearchGuessMime(name) {
@@ -1730,7 +1768,7 @@ function aiSearchReset() {
 
 async function aiSearchAsk(question) {
   if(!geminiApiKey) throw new Error('Gemini API 키를 설정해주세요. (설정 → AI 분류 엔진)');
-  const { relMsgs, relEvents, relDocs } = aiSearchGatherContext(question);
+  const { relMsgs, relEvents, relWeekly, relFolders, relDocs } = aiSearchGatherContext(question);
   const isFirstTurn = aiSearchConversation.length === 0;
 
   const textContext = `[카톡 메시지/할일]
@@ -1738,6 +1776,12 @@ ${relMsgs.map(m => `- (${m.messageDate||''}) [${m.tag||''}] ${m.sender||''}: ${m
 
 [캘린더 일정]
 ${relEvents.map(e => `- ${e.date}${e.endDate?'~'+e.endDate:''} ${e.title}${e.memo?' / '+e.memo:''}`).join('\n') || '(관련 일정 없음)'}
+
+[주간업무일지]
+${relWeekly.map(r => `- (${r.date_key}) ${r.row_name}: ${r.content}`).join('\n') || '(관련 주간업무일지 없음)'}
+
+[검측요청서 폴더]
+${relFolders.map(f => `- ${f.title}`).join('\n') || '(관련 검측요청서 폴더 없음)'}
 
 [첨부 도면/문서 - 아래 이미지를 직접 읽어서 치수·마감재 등 정보를 답변에 활용하세요]
 ${relDocs.map(d => `- ${d.title} (${d.category||''})`).join('\n') || '(관련 도면 없음)'}`;
@@ -1778,7 +1822,7 @@ ${textContext}
   const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '답변을 생성하지 못했어요.';
   aiSearchConversation.push({ role: 'model', parts: [{ text: answer }] });
 
-  return { answer, relMsgs, relEvents, relDocs };
+  return { answer, relMsgs, relEvents, relWeekly, relFolders, relDocs };
 }
 
 async function runAiSearch() {
@@ -1799,13 +1843,13 @@ async function runAiSearch() {
   answerEl.scrollTop = answerEl.scrollHeight;
 
   try {
-    const { answer, relMsgs, relEvents, relDocs } = await aiSearchAsk(q);
+    const { answer, relMsgs, relEvents, relWeekly, relFolders, relDocs } = await aiSearchAsk(q);
     const turnEl = document.getElementById(turnId);
     if(turnEl) turnEl.outerHTML = `
       <div id="${turnId}" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px">
         <div style="font-size:14px;color:var(--text);white-space:pre-wrap;line-height:1.6">${answer}</div>
         ${relDocs.length ? `<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">${relDocs.map(d => `<div onclick="openInspectionDocView('${d.id}')" style="cursor:pointer;border:1px solid var(--border);border-radius:8px;overflow:hidden;width:60px"><img src="${d.file_url||''}" style="width:60px;height:60px;object-fit:cover;display:block"></div>`).join('')}</div>` : ''}
-        <div style="margin-top:8px;font-size:10px;color:var(--muted)">참고: 메시지 ${relMsgs.length}건 · 일정 ${relEvents.length}건 · 도면 ${relDocs.length}건</div>
+        <div style="margin-top:8px;font-size:10px;color:var(--muted)">참고: 메시지 ${relMsgs.length}건 · 일정 ${relEvents.length}건 · 주간업무일지 ${relWeekly.length}건 · 검측요청서 ${relFolders.length}건 · 도면 ${relDocs.length}건</div>
       </div>`;
     saveAiSearchTurn(q, answer);
   } catch(e) {
