@@ -2865,7 +2865,7 @@ function renderLibraryCatList() {
     const name = typeof cat === 'string' ? cat : cat.name;
     const children = (typeof cat === 'object' && cat.children) ? cat.children : [];
     return `
-    <div class="lib-cat-item" data-idx="${i}" style="border:1px solid var(--border);border-radius:8px;background:var(--card);margin-bottom:4px;overflow:hidden">
+    <div class="lib-cat-item" data-idx="${i}" style="border:1px solid var(--border);border-radius:8px;background:var(--card);margin-bottom:4px;overflow:hidden;flex-shrink:0">
       <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg)">
         <span class="lib-cat-handle" style="font-size:14px;color:var(--soft);cursor:grab;padding:0 2px">⠿</span>
         <input value="${name}" data-prev="${name}" onfocus="this.dataset.prev=this.value" onchange="handleCatNameChange(this, ${i})"
