@@ -917,6 +917,15 @@ function confirmAddRoom() {
 }
 
 // ===== 대시보드 =====
+let pendingAiSearchQuery = null; // 대시보드에서 입력 후 검색 페이지로 넘어가 자동 실행할 질문
+
+function dashboardAiSearchSubmit(value) {
+  const q = (value||'').trim();
+  if(!q) return;
+  pendingAiSearchQuery = q;
+  setView('search');
+}
+
 function renderDashboard(el) {
   const today = new Date();
   const missedDays = appSettings.missedDays || 1;
@@ -996,6 +1005,12 @@ function renderDashboard(el) {
             <span style="font-size:11px;font-weight:700;color:${i.color};background:${i.bg};padding:3px 9px;border-radius:20px;white-space:nowrap">${i.tag}</span>
           </div>`).join('')}
       </div>` : ''}
+      <div style="display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(99,102,241,.18)">
+        <span style="font-size:14px">🤖</span>
+        <input id="dash-ai-input" placeholder="AI에게 물어보기 (예: 302동 타설 일정 알려줘)"
+          onkeydown="if(event.key==='Enter') dashboardAiSearchSubmit(this.value)"
+          style="flex:1;border:1px solid #c4b5fd;border-radius:8px;padding:8px 12px;font-size:13px;background:var(--card);color:var(--text);outline:none">
+      </div>
     </div>`;
 
   el.innerHTML = `
@@ -1597,6 +1612,15 @@ function renderSearchView(el) {
     }
   }
   updateSearchResults();
+
+  // 대시보드에서 질문을 입력하고 넘어온 경우, 자동으로 채워서 실행
+  if(pendingAiSearchQuery) {
+    const q = pendingAiSearchQuery;
+    pendingAiSearchQuery = null;
+    const aiInp = document.getElementById('ai-search-input');
+    if(aiInp) aiInp.value = q;
+    runAiSearch();
+  }
 }
 
 // ===== AI 검색 (Gemini, 텍스트+도면 이미지 분석) =====
