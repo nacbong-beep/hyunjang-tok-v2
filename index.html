@@ -2842,12 +2842,14 @@ let libViewDoc = null;
 
 // ===== 카테고리 관리 =====
 let libCatDraft = [];
+let libCatRenameMap = {}; // 공종명 변경 추적: 원래이름 -> 변경된이름 (저장 시 기존 도면/자료에도 반영)
 
 function openLibraryCatManager(storageType) {
   _libCatStorageType = storageType || currentView || 'library';
   libCatDraft = LIBRARY_CATEGORIES.map(c =>
     typeof c === 'string' ? {name:c, children:[]} : {...c, children:c.children||[]}
   );
+  libCatRenameMap = {};
   renderLibraryCatList();
   document.getElementById('lib-cat-modal').style.display = 'flex';
   document.getElementById('lib-cat-new-input').value = '';
@@ -2866,7 +2868,7 @@ function renderLibraryCatList() {
     <div class="lib-cat-item" data-idx="${i}" style="border:1px solid var(--border);border-radius:8px;background:var(--card);margin-bottom:4px;overflow:hidden">
       <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg)">
         <span class="lib-cat-handle" style="font-size:14px;color:var(--soft);cursor:grab;padding:0 2px">⠿</span>
-        <input value="${name}" onchange="libCatDraft[${i}].name=this.value"
+        <input value="${name}" data-prev="${name}" onfocus="this.dataset.prev=this.value" onchange="handleCatNameChange(this, ${i})"
           style="flex:1;border:none;background:transparent;font-size:13px;font-weight:700;color:var(--text);outline:none;font-family:inherit">
         <button onclick="addChildCat(${i})" style="border:1px solid var(--border2);background:var(--card);border-radius:5px;width:22px;height:22px;font-size:10px;cursor:pointer;color:var(--muted)" title="하위 추가">+</button>
         <button onclick="deleteLibraryCat(${i})" style="border:1px solid #fecaca;background:#fff;color:#ef4444;border-radius:5px;width:22px;height:22px;font-size:10px;cursor:pointer">✕</button>
@@ -2876,7 +2878,7 @@ function renderLibraryCatList() {
       <div class="lib-child-item" data-cidx="${j}" style="display:flex;align-items:center;gap:6px;padding:6px 10px 6px 14px;border-top:1px solid var(--border)">
         <span class="lib-child-handle" style="font-size:13px;color:var(--soft);cursor:grab;padding:0 2px">⠿</span>
         <span style="font-size:11px;color:var(--soft)">└</span>
-        <input value="${child}" onchange="libCatDraft[${i}].children[${j}]=this.value"
+        <input value="${child}" data-prev="${child}" onfocus="this.dataset.prev=this.value" onchange="handleCatNameChange(this, ${i}, ${j})"
           style="flex:1;border:none;background:transparent;font-size:12px;color:var(--text);outline:none;font-family:inherit">
         <button onclick="deleteChildCat(${i},${j})" style="border:1px solid #fecaca;background:#fff;color:#ef4444;border-radius:5px;width:20px;height:20px;font-size:10px;cursor:pointer">✕</button>
       </div>`).join('')}
@@ -2965,6 +2967,46 @@ function initLibCatDrag() {
   });
 }
 
+function handleCatNameChange(el, i, j) {
+  const oldName = el.dataset.prev;
+  const newName = el.value;
+  if(j === undefined || j === null) {
+    libCatDraft[i].name = newName;
+  } else {
+    libCatDraft[i].children[j] = newName;
+  }
+  if(oldName !== undefined && oldName !== newName && oldName !== '') {
+    // 같은 항목을 여러 번 고친 경우 체인 추적 (A -> B -> C 면 최종 A -> C로 기록)
+    let chained = false;
+    for(const k in libCatRenameMap) {
+      if(libCatRenameMap[k] === oldName) { libCatRenameMap[k] = newName; chained = true; }
+    }
+    if(!chained) libCatRenameMap[oldName] = newName;
+  }
+  el.dataset.prev = newName;
+}
+
+async function applyCatRenamesToDocs(docType) {
+  const entries = Object.entries(libCatRenameMap).filter(([o,n]) => o && n && o !== n);
+  if(!entries.length) return;
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  for(const [oldName, newName] of entries) {
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/library_docs?doc_type=eq.${encodeURIComponent(docType)}&category=eq.${encodeURIComponent(oldName)}`, {
+        method: 'PATCH',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ category: newName })
+      });
+    } catch(e) { console.warn('카테고리명 변경 반영 실패', oldName, '->', newName, e); }
+  }
+  // 로컬 캐시도 동일하게 갱신 (다시 불러오기 전에도 화면 일치시키기 위함)
+  libraryDocs = libraryDocs.map(d => {
+    if(d.doc_type !== docType) return d;
+    const hit = entries.find(([o]) => o === d.category);
+    return hit ? {...d, category: hit[1]} : d;
+  });
+}
+
 function addLibraryCat() {
   const val = document.getElementById('lib-cat-new-input').value.trim();
   if(!val) { showToast('공종명을 입력해주세요'); return; }
@@ -3019,6 +3061,8 @@ async function saveLibraryCats() {
   // 캐시 즉시 업데이트 (renderLibraryView가 덮어쓰지 않도록)
   LIB_CAT_CACHE[docType] = [...LIBRARY_CATEGORIES];
   await saveLibraryCatsToSupabase(docType, LIBRARY_CATEGORIES);
+  await applyCatRenamesToDocs(docType);
+  libCatRenameMap = {};
   closeLibraryCatManager();
   showToast('✅ 공종 분류가 저장됐어요!');
   renderLibraryView(document.getElementById('main-content'), docType);
