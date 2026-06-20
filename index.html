@@ -2859,17 +2859,56 @@ function renderLibraryCatList() {
         <button onclick="addChildCat(${i})" style="border:1px solid var(--border2);background:var(--card);border-radius:5px;width:22px;height:22px;font-size:10px;cursor:pointer;color:var(--muted)" title="하위 추가">+</button>
         <button onclick="deleteLibraryCat(${i})" style="border:1px solid #fecaca;background:#fff;color:#ef4444;border-radius:5px;width:22px;height:22px;font-size:10px;cursor:pointer">✕</button>
       </div>
+      <div class="lib-child-list" data-parent="${i}">
       ${children.map((child, j) => `
-      <div style="display:flex;align-items:center;gap:8px;padding:6px 10px 6px 28px;border-top:1px solid var(--border)">
+      <div class="lib-child-item" data-cidx="${j}" style="display:flex;align-items:center;gap:6px;padding:6px 10px 6px 14px;border-top:1px solid var(--border)">
+        <span class="lib-child-handle" style="font-size:13px;color:var(--soft);cursor:grab;padding:0 2px">⠿</span>
         <span style="font-size:11px;color:var(--soft)">└</span>
         <input value="${child}" onchange="libCatDraft[${i}].children[${j}]=this.value"
           style="flex:1;border:none;background:transparent;font-size:12px;color:var(--text);outline:none;font-family:inherit">
         <button onclick="deleteChildCat(${i},${j})" style="border:1px solid #fecaca;background:#fff;color:#ef4444;border-radius:5px;width:20px;height:20px;font-size:10px;cursor:pointer">✕</button>
       </div>`).join('')}
+      </div>
     </div>`;
   }).join('');
   // 드래그 초기화
   initLibCatDrag();
+  initLibChildDrag();
+}
+
+function initLibChildDrag() {
+  document.querySelectorAll('.lib-child-list').forEach(list => {
+    const parentIdx = parseInt(list.getAttribute('data-parent'));
+    let dragging = null;
+    list.querySelectorAll('.lib-child-item').forEach(el => {
+      el.draggable = true;
+      el.addEventListener('dragstart', e => {
+        dragging = el;
+        e.stopPropagation();
+        setTimeout(() => el.style.opacity = '0.4', 0);
+      });
+      el.addEventListener('dragend', e => {
+        e.stopPropagation();
+        el.style.opacity = '';
+        dragging = null;
+        const newOrder = [...list.querySelectorAll('.lib-child-item')].map(d => parseInt(d.getAttribute('data-cidx')));
+        const children = libCatDraft[parentIdx].children || [];
+        libCatDraft[parentIdx].children = newOrder.map(j => children[j]);
+        // data-cidx 재정렬을 위해 다시 그림
+        renderLibraryCatList();
+      });
+      el.addEventListener('dragover', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        if(dragging && dragging !== el) {
+          const rect = el.getBoundingClientRect();
+          const mid = rect.top + rect.height/2;
+          if(e.clientY < mid) list.insertBefore(dragging, el);
+          else list.insertBefore(dragging, el.nextSibling);
+        }
+      });
+    });
+  });
 }
 
 function initLibCatDrag() {
