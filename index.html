@@ -954,13 +954,28 @@ function renderDashboard(el) {
       tag:'확인 필요', onclick:"setView('cat_지시사항')"
     });
   }
-  const upcomingEvent = calEvents.find(e => e.date >= todayKey() && e.date <= addDaysKey(1));
+  // 오늘/내일 일정: 메시지 기반 일정 + customEvents(휴무·근무 등) 둘 다 확인
+  const todayKeyStr = todayKey();
+  const tomorrowKeyStr = addDaysKey(1);
+  const customToday = getCustomEventsForDate(todayKeyStr);
+  const customTomorrow = getCustomEventsForDate(tomorrowKeyStr);
+  const msgToday = calEvents.filter(e => e.date === todayKeyStr);
+  const msgTomorrow = calEvents.filter(e => e.date === tomorrowKeyStr);
+
+  let upcomingEvent = null;
+  let upcomingDay = null;
+  if(customToday.length || msgToday.length) {
+    upcomingEvent = customToday[0] || msgToday[0];
+    upcomingDay = '오늘';
+  } else if(customTomorrow.length || msgTomorrow.length) {
+    upcomingEvent = customTomorrow[0] || msgTomorrow[0];
+    upcomingDay = '내일';
+  }
   if(upcomingEvent) {
-    const dayLabel = upcomingEvent.date === todayKey() ? '오늘' : '내일';
     briefingItems.push({
       icon:'📅', color:'#1d4ed8', bg:'#eff6ff',
       text:`${upcomingEvent.title||''}`,
-      tag:`${dayLabel} ${upcomingEvent.date.slice(5)}`, onclick:"setView('calendar')"
+      tag:`${upcomingDay} ${(upcomingEvent.date||(upcomingDay==='오늘'?todayKeyStr:tomorrowKeyStr)).slice(5)}`, onclick:"setView('calendar')"
     });
   }
   const briefingSummary = briefingItems.length
