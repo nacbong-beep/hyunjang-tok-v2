@@ -1508,11 +1508,22 @@ function renderSearchView(el) {
   if(!el.querySelector('.search-wrap')) {
     el.innerHTML = `
       <div class="search-wrap">
-        <div style="display:flex;gap:8px;margin-bottom:10px">
-          <input id="ai-search-input" class="search-input" placeholder="AI에게 질문하기 (예: 지하2층 주차장 바닥 마감두께 얼마야?)" style="flex:1">
-          <button id="ai-search-btn" onclick="runAiSearch()" style="background:var(--primary);color:#fff;border:none;border-radius:9px;padding:0 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">🤖 AI 검색</button>
+        <div style="background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:14px;padding:14px;margin-bottom:14px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+            <span style="font-size:13px;font-weight:700;color:#6d28d9">🤖 AI에게 물어보기</span>
+            <span style="font-size:11px;color:#8b5cf6">메시지·일정·도면을 분석해서 답변해요</span>
+          </div>
+          <div style="display:flex;gap:8px">
+            <input id="ai-search-input" class="search-input" placeholder="예: 지하2층 주차장 바닥 마감두께 얼마야?" style="flex:1;border-color:#c4b5fd">
+            <button id="ai-search-btn" onclick="runAiSearch()" style="background:#7c3aed;color:#fff;border:none;border-radius:9px;padding:0 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">질문하기</button>
+          </div>
+          <div id="ai-search-answer"></div>
         </div>
-        <div id="ai-search-answer"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin:4px 0 12px;color:var(--muted);font-size:11px">
+          <div style="flex:1;height:1px;background:var(--border)"></div>
+          또는 키워드로 빠르게 찾기
+          <div style="flex:1;height:1px;background:var(--border)"></div>
+        </div>
         <input id="search-main-input" class="search-input" placeholder="키워드, 발신자, 요약 검색...">
       </div>
       <div id="search-results-panel"></div>`;
@@ -1630,7 +1641,7 @@ async function runAiSearch() {
   } catch(e) {
     answerEl.innerHTML = `<div style="background:#fee2e2;color:#b91c1c;border-radius:12px;padding:14px;margin-bottom:14px;font-size:13px">⚠️ ${e.message}</div>`;
   } finally {
-    btn.disabled = false; btn.textContent = '🤖 AI 검색';
+    btn.disabled = false; btn.textContent = '질문하기';
   }
 }
 
