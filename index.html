@@ -2838,6 +2838,13 @@ const LIB_CAT_KEYS = {
 };
 let libraryDocs = [];
 let libSelectedCat = {library:null, drawing:null, construction:null};
+let libCatCollapsedState = {}; // 사이드바 공종 분류 그룹 접기/펼치기 상태: {storageType: {catName: true/false}}
+
+function toggleLibCatGroup(storageType, catName) {
+  if(!libCatCollapsedState[storageType]) libCatCollapsedState[storageType] = {};
+  libCatCollapsedState[storageType][catName] = !libCatCollapsedState[storageType][catName];
+  renderLibraryView(document.getElementById('main-content'), storageType);
+}
 let libViewDoc = null;
 
 // ===== 카테고리 관리 =====
@@ -3795,13 +3802,14 @@ async function renderLibraryView(el, storageType='library') {
             const children = (typeof cat === 'object' && cat.children) ? cat.children : [];
             const isParentActive = curCat === catName || (children.length && children.includes(curCat));
             const parentCnt = libraryDocs.filter(d=>d.category===catName||children.includes(d.category)).length;
+            const isCollapsed = !!(libCatCollapsedState[storageType] && libCatCollapsedState[storageType][catName]);
             return `
             <div onclick="libSelectedCat['${storageType}']='${catName}';renderLibraryView(document.getElementById('main-content'),'${storageType}')"
               style="display:flex;align-items:center;padding:7px 10px;border-radius:8px;font-size:13px;cursor:pointer;margin-bottom:1px;background:${curCat===catName?'var(--primary)':'transparent'};color:${curCat===catName?'#fff':'var(--text)'};font-weight:700">
-              <span style="font-size:10px;margin-right:5px;opacity:.5">${children.length?'▼':'▶'}</span>
+              ${children.length ? `<span onclick="event.stopPropagation();toggleLibCatGroup('${storageType}','${catName}')" style="font-size:10px;margin-right:5px;opacity:.5;cursor:pointer;display:inline-block;padding:2px;transition:transform .15s;transform:rotate(${isCollapsed?'-90deg':'0deg'})">▼</span>` : `<span style="display:inline-block;width:15px"></span>`}
               ${catName} <span style="margin-left:auto;font-size:11px;opacity:.7">${parentCnt}</span>
             </div>
-            ${children.map(child => {
+            ${(!isCollapsed ? children : []).map(child => {
               const childCnt = libraryDocs.filter(d=>d.category===child).length;
               const isChildActive = curCat === child;
               return `<div onclick="event.stopPropagation();libSelectedCat['${storageType}']='${child}';renderLibraryView(document.getElementById('main-content'),'${storageType}')"
