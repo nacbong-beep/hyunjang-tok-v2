@@ -387,7 +387,7 @@ a{color:inherit;text-decoration:none}
     <button onclick="libZoomFit()" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;padding:0 10px;height:32px;font-size:12px;cursor:pointer">전체 맞춤</button>
   </div>
   <div style="flex:1;overflow:auto;display:flex;padding:20px" id="lib-view-scroll">
-    <img id="lib-view-img" src="" style="object-fit:contain;border-radius:8px;transform-origin:center;transition:transform .15s;margin:auto">
+    <img id="lib-view-img" src="" style="object-fit:contain;border-radius:8px;transition:width .15s;margin:auto">
   </div>
 </div>
 
@@ -4097,28 +4097,51 @@ async function saveLibraryDoc() {
   btn.textContent = '저장'; btn.disabled = false;
 }
 
-let libZoomScale = 1;
+let libZoomScale = 1;      // 현재 줌 배율 (1 = fit 기준)
+let libBaseFitWidth = 0;   // "전체 맞춤" 상태의 기준 너비(px)
 
-function libZoom(delta) {
-  libZoomScale = Math.max(0.2, Math.min(5, libZoomScale + delta));
+function libApplyZoomWidth() {
   const img = document.getElementById('lib-view-img');
-  if(img) img.style.transform = `scale(${libZoomScale})`;
+  if(!img || !libBaseFitWidth) return;
+  img.style.width = (libBaseFitWidth * libZoomScale) + 'px';
+  img.style.height = 'auto';
   const label = document.getElementById('lib-zoom-label');
   if(label) label.textContent = Math.round(libZoomScale * 100) + '%';
 }
 
+function libZoom(delta) {
+  if(!libBaseFitWidth) return;
+  libZoomScale = Math.max(0.2, Math.min(8, libZoomScale + delta));
+  libApplyZoomWidth();
+}
+
 function libZoomReset() {
-  libZoomScale = 1;
+  // 원본 = 이미지의 실제 자연 픽셀 크기
   const img = document.getElementById('lib-view-img');
-  if(img) { img.style.transform = 'scale(1)'; img.style.maxWidth = 'none'; img.style.maxHeight = 'none'; }
-  const label = document.getElementById('lib-zoom-label');
-  if(label) label.textContent = '100%';
+  if(img && img.naturalWidth && libBaseFitWidth) {
+    libZoomScale = img.naturalWidth / libBaseFitWidth;
+    libApplyZoomWidth();
+  }
 }
 
 function libZoomFit() {
-  libZoomScale = 1;
   const img = document.getElementById('lib-view-img');
-  if(img) { img.style.transform = 'scale(1)'; img.style.maxWidth = '100%'; img.style.maxHeight = '100%'; }
+  const container = document.getElementById('lib-view-scroll');
+  if(!img || !container || !img.naturalWidth) {
+    libZoomScale = 1;
+    const label = document.getElementById('lib-zoom-label');
+    if(label) label.textContent = '100%';
+    return;
+  }
+  const availW = Math.max(50, container.clientWidth - 40);  // padding 20px*2 고려
+  const availH = Math.max(50, container.clientHeight - 40);
+  const ratio = img.naturalWidth / img.naturalHeight;
+  let w = availW, h = w / ratio;
+  if(h > availH) { h = availH; w = h * ratio; }
+  libBaseFitWidth = w;
+  libZoomScale = 1;
+  img.style.width = w + 'px';
+  img.style.height = 'auto';
   const label = document.getElementById('lib-zoom-label');
   if(label) label.textContent = '100%';
 }
@@ -4133,11 +4156,17 @@ async function openLibraryDoc(id) {
   document.getElementById('lib-view-meta').innerHTML =
     `${doc.category} · ${new Date(doc.created_at).toLocaleDateString('ko-KR')}${doc.memo?' · '+doc.memo:''}` +
     (doc.file_name ? `<span style="margin-left:8px;opacity:.6;font-size:11px">📎 ${doc.file_name}</span>` : '');
-  document.getElementById('lib-view-img').src = '';
-  libZoomFit();
+  const img = document.getElementById('lib-view-img');
+  img.src = '';
+  img.style.width = '';
+  libBaseFitWidth = 0;
+  libZoomScale = 1;
   document.getElementById('lib-view-delete').onclick = () => deleteLibraryDoc(doc.id, doc.file_path);
   const url = await getLibraryFileUrl(doc.file_path);
-  if(url) document.getElementById('lib-view-img').src = url;
+  if(url) {
+    img.onload = () => { libZoomFit(); };
+    img.src = url;
+  }
 }
 
 function printLibraryDoc() {
