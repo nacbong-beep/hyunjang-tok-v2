@@ -2893,7 +2893,12 @@ function initLibChildDrag() {
     const parentIdx = parseInt(list.getAttribute('data-parent'));
     let dragging = null;
     list.querySelectorAll('.lib-child-item').forEach(el => {
-      el.draggable = true;
+      el.draggable = false;
+      const handle = el.querySelector('.lib-child-handle');
+      if(handle) {
+        handle.addEventListener('mousedown', () => { el.draggable = true; });
+        handle.addEventListener('touchstart', () => { el.draggable = true; }, {passive:true});
+      }
       el.addEventListener('dragstart', e => {
         dragging = el;
         e.stopPropagation();
@@ -2902,6 +2907,7 @@ function initLibChildDrag() {
       el.addEventListener('dragend', e => {
         e.stopPropagation();
         el.style.opacity = '';
+        el.draggable = false;
         dragging = null;
         const newOrder = [...list.querySelectorAll('.lib-child-item')].map(d => parseInt(d.getAttribute('data-cidx')));
         const children = libCatDraft[parentIdx].children || [];
@@ -2928,13 +2934,19 @@ function initLibCatDrag() {
   if(!list) return;
   let dragging = null;
   list.querySelectorAll('.lib-cat-item').forEach(el => {
-    el.draggable = true;
+    el.draggable = false;
+    const handle = el.querySelector('.lib-cat-handle');
+    if(handle) {
+      handle.addEventListener('mousedown', () => { el.draggable = true; });
+      handle.addEventListener('touchstart', () => { el.draggable = true; }, {passive:true});
+    }
     el.addEventListener('dragstart', e => {
       dragging = el;
       setTimeout(() => el.style.opacity = '0.4', 0);
     });
     el.addEventListener('dragend', e => {
       el.style.opacity = '';
+      el.draggable = false;
       dragging = null;
       // 순서 반영
       const newOrder = [...list.querySelectorAll('.lib-cat-item')].map(d => parseInt(d.getAttribute('data-idx')));
@@ -2960,6 +2972,9 @@ function addLibraryCat() {
   libCatDraft.push({name:val, children:[]});
   document.getElementById('lib-cat-new-input').value = '';
   renderLibraryCatList();
+  // 새로 추가된 항목이 화면에 보이도록 스크롤
+  const list = document.getElementById('lib-cat-list');
+  if(list) list.scrollTop = list.scrollHeight;
 }
 
 function addChildCat(parentIdx) {
@@ -2968,6 +2983,9 @@ function addChildCat(parentIdx) {
   if(!libCatDraft[parentIdx].children) libCatDraft[parentIdx].children = [];
   libCatDraft[parentIdx].children.push(child.trim());
   renderLibraryCatList();
+  // 추가된 하위 항목이 보이도록 스크롤
+  const list = document.getElementById('lib-cat-list');
+  if(list) list.scrollTop = list.scrollHeight;
 }
 
 function deleteChildCat(parentIdx, childIdx) {
@@ -3807,7 +3825,7 @@ async function renderLibraryView(el, storageType='library') {
     <div id="lib-cat-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1001;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
       <div class="modal" style="max-width:380px">
         <div class="modal-title">⚙️ 공종 분류 관리</div>
-        <div id="lib-cat-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;max-height:320px;overflow-y:auto"></div>
+        <div id="lib-cat-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px;max-height:min(320px,45vh);overflow-y:auto"></div>
         <div style="display:flex;gap:8px;margin-bottom:14px">
           <input id="lib-cat-new-input" class="modal-input" placeholder="새 공종명 입력" style="margin-bottom:0;flex:1">
           <button onclick="addLibraryCat()" class="btn-primary" style="padding:9px 14px;font-size:13px;white-space:nowrap">+ 추가</button>
