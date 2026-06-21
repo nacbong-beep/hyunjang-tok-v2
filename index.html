@@ -1713,15 +1713,20 @@ function aiSearchGuessMime(name) {
   return 'image/jpeg';
 }
 
-async function aiSearchUrlToBase64(url) {
+let aiSearchImageCache = {}; // file_path -> base64 (세션 내 캐시, 같은 도면 재다운로드해서 egress 낭비하는 것 방지)
+
+async function aiSearchUrlToBase64(url, cacheKey) {
+  if(cacheKey && aiSearchImageCache[cacheKey]) return aiSearchImageCache[cacheKey];
   const res = await fetch(url);
   const blob = await res.blob();
-  return new Promise((resolve, reject) => {
+  const base64 = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => resolve(reader.result.split(',')[1]);
     reader.onerror = reject;
     reader.readAsDataURL(blob);
   });
+  if(cacheKey) aiSearchImageCache[cacheKey] = base64;
+  return base64;
 }
 
 let aiSearchConversation = []; // Gemini 멀티턴 히스토리: [{role:'user'|'model', parts:[...]}]
@@ -1937,7 +1942,7 @@ ${textContext}
   for(const doc of relDocs) {
     if(!doc.file_url) continue;
     try {
-      const base64 = await aiSearchUrlToBase64(doc.file_url);
+      const base64 = await aiSearchUrlToBase64(doc.file_url, doc.file_path || doc.id);
       parts.push({ inlineData: { mimeType: aiSearchGuessMime(doc.file_name || doc.file_path), data: base64 } });
     } catch(e) { console.warn('이미지 변환 실패', doc.title, e); }
   }
