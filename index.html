@@ -1604,19 +1604,20 @@ function renderSearchView(el) {
 function renderAiSearchView(el) {
   if(!el.querySelector('.ai-search-wrap')) {
     el.innerHTML = `
-      <div class="ai-search-wrap" style="max-width:760px;margin:0 auto">
-        <div style="background:linear-gradient(135deg,#f0ebfe,#e8edfd);border:1.5px solid #c4b5fd;border-radius:14px;padding:18px">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
-            <span style="font-size:14px;font-weight:700;color:#6d28d9">🤖 AI에게 물어보기</span>
-            <span style="font-size:12px;color:#8b5cf6">메시지·일정·주간업무일지·도면을 분석해서 답변해요</span>
-            <button onclick="openAiSearchList()" style="margin-left:auto;background:transparent;border:1px solid #c4b5fd;color:#7c3aed;border-radius:7px;padding:4px 12px;font-size:12px;cursor:pointer;font-weight:700">📋 대화 목록</button>
-            <button onclick="aiSearchReset()" style="background:transparent;border:1px solid #c4b5fd;color:#7c3aed;border-radius:7px;padding:4px 12px;font-size:12px;cursor:pointer;font-weight:700">🔄 새 대화</button>
+      <div class="ai-search-wrap" style="max-width:760px;margin:0 auto;display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px">
+          <span style="font-size:14px;font-weight:700;color:#6d28d9">🤖 AI에게 물어보기</span>
+          <span style="font-size:12px;color:#8b5cf6">메시지·일정·주간업무일지·도면을 분석해서 답변해요</span>
+          <button onclick="openAiSearchList()" style="margin-left:auto;background:transparent;border:1px solid #c4b5fd;color:#7c3aed;border-radius:7px;padding:4px 12px;font-size:12px;cursor:pointer;font-weight:700">📋 대화 목록</button>
+          <button onclick="aiSearchReset()" style="background:transparent;border:1px solid #c4b5fd;color:#7c3aed;border-radius:7px;padding:4px 12px;font-size:12px;cursor:pointer;font-weight:700">🔄 새 대화</button>
+        </div>
+        <div id="ai-search-answer" style="flex:1"></div>
+        <div style="position:sticky;bottom:0;background:var(--bg);padding:14px 0 4px;margin-top:14px">
+          <div style="display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid #c4b5fd;border-radius:14px;padding:6px 6px 6px 16px;box-shadow:0 6px 24px rgba(109,40,217,.14)">
+            <span style="font-size:15px">🤖</span>
+            <input id="ai-search-input" placeholder="AI에게 물어보기" style="flex:1;border:none;background:transparent;font-size:13px;color:var(--text);outline:none">
+            <button id="ai-search-btn" onclick="runAiSearch()" style="background:#7c3aed;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">질문하기</button>
           </div>
-          <div style="display:flex;gap:8px">
-            <input id="ai-search-input" class="search-input" placeholder="예: 지하2층 주차장 바닥 마감두께 얼마야?" style="flex:1;border-color:#c4b5fd">
-            <button id="ai-search-btn" onclick="runAiSearch()" style="background:#7c3aed;color:#fff;border:none;border-radius:9px;padding:0 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">질문하기</button>
-          </div>
-          <div id="ai-search-answer" style="margin-top:10px;padding-top:2px"></div>
         </div>
       </div>`;
     const aiInp = el.querySelector('#ai-search-input');
