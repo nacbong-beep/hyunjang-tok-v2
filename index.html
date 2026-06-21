@@ -4534,12 +4534,44 @@ function closeLibraryUpload() {
   libPendingFile = null;
 }
 
-async function handleLibraryBulkSelect(fileList, storageType) {
+function handleLibraryBulkSelect(fileList, storageType) {
   const files = Array.from(fileList || []);
   if(!files.length) return;
-  const category = prompt(`${files.length}개 파일에 공통으로 적용할 공종 분류를 입력해주세요 (예: 302동)`, '');
-  if(category === null) return; // 취소
   document.getElementById('lib-bulk-file-input').value = ''; // 같은 파일 다시 선택 가능하도록 초기화
+
+  // 기존 공종 분류(부모+자식)를 평탄화해서 옵션으로 제공 (오타/불일치 방지)
+  const options = [];
+  LIBRARY_CATEGORIES.forEach(cat => {
+    const name = typeof cat === 'string' ? cat : cat.name;
+    const children = (typeof cat === 'object' && cat.children) ? cat.children : [];
+    options.push(name);
+    children.forEach(c => options.push(`${name} > ${c}`));
+  });
+
+  document.body.insertAdjacentHTML('beforeend', `
+    <div id="lib-bulk-cat-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1002;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
+      <div style="background:var(--card);border-radius:16px;padding:24px;width:min(420px,92vw)">
+        <div style="font-size:15px;font-weight:700;margin-bottom:6px">📦 ${files.length}개 파일 일괄 업로드</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:14px">적용할 공종 분류를 선택해주세요</div>
+        <select id="lib-bulk-cat-select" style="width:100%;padding:10px;border:1px solid var(--border);border-radius:8px;font-size:13px;margin-bottom:16px;background:var(--card);color:var(--text)">
+          ${options.length ? options.map(o => `<option value="${o.includes(' > ') ? o.split(' > ').pop() : o}">${o}</option>`).join('') : '<option value="">(만들어진 공종 분류가 없어요)</option>'}
+        </select>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button onclick="document.getElementById('lib-bulk-cat-modal').remove()" class="btn-ghost" style="padding:8px 16px;font-size:13px">취소</button>
+          <button onclick="confirmLibraryBulkUpload(${JSON.stringify(files.map(f=>f.name))}, '${storageType}')" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer">업로드 시작</button>
+        </div>
+      </div>
+    </div>`);
+
+  // 선택된 파일 객체를 임시 보관 (modal에는 파일명만 표시용으로 넘기고, 실제 File 객체는 클로저로 유지)
+  window._libBulkFiles = files;
+}
+
+async function confirmLibraryBulkUpload(fileNames, storageType) {
+  const category = document.getElementById('lib-bulk-cat-select').value;
+  const files = window._libBulkFiles || [];
+  document.getElementById('lib-bulk-cat-modal').remove();
+  if(!files.length) return;
 
   // 진행률 모달
   document.body.insertAdjacentHTML('beforeend', `
@@ -4576,6 +4608,7 @@ async function handleLibraryBulkSelect(fileList, storageType) {
     failEl.innerHTML = `실패: ${failed.slice(0,10).join(', ')}${failed.length>10?` 외 ${failed.length-10}건`:''}`;
   }
   showToast(`✅ 업로드 완료! 성공 ${files.length-failed.length}건${failed.length?` · 실패 ${failed.length}건`:''}`);
+  window._libBulkFiles = null;
   setTimeout(() => {
     const modal = document.getElementById('lib-bulk-modal');
     if(modal) modal.remove();
