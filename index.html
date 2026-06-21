@@ -3298,6 +3298,86 @@ async function renderWeeklyView(el) {
         </div>
         <div id="weekly-search-results" style="margin-top:10px"></div>
       </div>
+      ${window.innerWidth <= 500
+        ? renderWeeklyDayCardSection(wk, days, weatherData)
+        : renderWeeklyTableSection(wk, days, weatherData)}
+    </div>`;
+}
+
+let weeklySelectedDayIdx = null; // null이면 오늘(이번주 안에 있으면)로 자동 설정
+let _weeklyDayCardCtx = null; // 탭 전환 시 재사용할 컨텍스트(wk, days, weatherData)
+
+function weeklyEventBadge(e) {
+  let bg, c;
+  if(/^휴무/.test(e.text.trim())) { bg='#fee2e2'; c='#b91c1c'; }
+  else if(/^근무/.test(e.text.trim())) { bg='#dcfce7'; c='#0f766e'; }
+  else if(e.text && e.text.includes('타설')) { bg='#fff3b0'; c='#7a6000'; }
+  else if(e.isMsg) { bg='#ede9fe'; c='#6d28d9'; }
+  else if(e.color && e.color!=='none') { bg=e.color+'22'; c=e.color; }
+  else { bg='#dbeafe'; c='#1e40af'; }
+  return `<span style="display:inline-block;font-size:12px;font-weight:700;padding:4px 9px;border-radius:6px;margin:0 4px 4px 0;background:${bg};color:${c}">${e.text}</span>`;
+}
+
+function renderWeeklyDayCardSection(wk, days, weatherData) {
+  if(weeklySelectedDayIdx === null) {
+    const idx = days.findIndex(d => d.key === todayKey());
+    weeklySelectedDayIdx = idx >= 0 ? idx : 0;
+  }
+  _weeklyDayCardCtx = { wk, days, weatherData };
+  return `<div id="weekly-daycard-wrap">${weeklyDayTabsHTML(days, weeklySelectedDayIdx)}${weeklyDayCardBodyHTML(wk, days, weeklySelectedDayIdx, weatherData)}</div>`;
+}
+
+function weeklyDayTabsHTML(days, selIdx) {
+  return `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:14px">
+    ${days.map((d,i) => {
+      const isToday = d.key === todayKey();
+      const isSel = i === selIdx;
+      return `<button onclick="switchWeeklyDay(${i})" style="flex-shrink:0;padding:8px 14px;border-radius:9px;font-size:13px;font-weight:700;border:${isSel?'none':'1px solid var(--border)'};background:${isSel?'var(--primary)':'var(--card)'};color:${isSel?'#fff':isToday?'var(--primary)':'var(--text)'};cursor:pointer;white-space:nowrap">${d.label}</button>`;
+    }).join('')}
+  </div>`;
+}
+
+function weeklyDayCardBodyHTML(wk, days, dIdx, weatherData) {
+  const d = days[dIdx];
+  const autoWeather = weatherData && weatherData[d.key] ? weatherData[d.key] : '-';
+  const dayEvents = [
+    ...messages.filter(m=>(m.eventDate||m.messageDate)===d.key&&normalizeTag(m.tag)==='일정').map(m=>({text:m.summary, isMsg:true})),
+    ...customEvents.filter(e=>{const s=e.date,en=e.endDate||e.date;return d.key>=s&&d.key<=en;}).map(e=>({text:e.title, color:e.color}))
+  ];
+  const editRows = ['작업사항','검측사항','확인사항','서류사항','기타'];
+
+  return `
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px">
+      <div style="font-size:13px;font-weight:700;color:#185FA5;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid var(--border)">🌤️ ${autoWeather}</div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">📅 일정</div>
+        ${dayEvents.length ? dayEvents.map(weeklyEventBadge).join('') : '<span style="font-size:12px;color:var(--soft)">일정 없음</span>'}
+      </div>
+      ${editRows.map(row => {
+        const cellId = 'wcard_'+row+'_'+d.key;
+        const val = getWeeklyCell(wk, row, d.key);
+        return `
+        <div style="margin-bottom:14px">
+          <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">${row}</div>
+          <textarea id="${cellId}" placeholder="입력..."
+            style="width:100%;min-height:70px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.6;background:var(--surface);color:var(--text);resize:vertical;outline:none;font-family:inherit"
+            oninput="setWeeklyCellLocal('${wk}','${row}','${d.key}',this.value)"
+            >${val}</textarea>
+        </div>`;
+      }).join('')}
+    </div>`;
+}
+
+function switchWeeklyDay(idx) {
+  weeklySelectedDayIdx = idx;
+  const ctx = _weeklyDayCardCtx;
+  if(!ctx) return;
+  const wrap = document.getElementById('weekly-daycard-wrap');
+  if(wrap) wrap.innerHTML = weeklyDayTabsHTML(ctx.days, idx) + weeklyDayCardBodyHTML(ctx.wk, ctx.days, idx, ctx.weatherData);
+}
+
+function renderWeeklyTableSection(wk, days, weatherData) {
+  return `
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;table-layout:fixed">
           <thead>
@@ -3378,9 +3458,7 @@ async function renderWeeklyView(el) {
             }).join('')}
           </tbody>
         </table>
-      </div>
-
-    </div>`;
+      </div>`;
 }
 
 // ===== 건설라이브러리 =====
