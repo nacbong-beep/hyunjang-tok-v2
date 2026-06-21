@@ -1886,6 +1886,18 @@ function closeAiSearchList() {
 }
 
 
+// 모델이 같은 문장을 계속 반복하는 무한루프성 응답인지 감지
+function aiSearchIsDegenerate(text) {
+  if(!text || text.length < 800) return false;
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 8);
+  const counts = {};
+  for(const line of lines) {
+    counts[line] = (counts[line] || 0) + 1;
+    if(counts[line] >= 4) return true; // 같은 줄이 4번 이상 반복되면 비정상으로 판단
+  }
+  return false;
+}
+
 async function aiSearchAsk(question) {
   if(!geminiApiKey) throw new Error('Gemini API 키를 설정해주세요. (설정 → AI 분류 엔진)');
   const { relMsgs, relEvents, relWeekly, relFolders, relDocs } = aiSearchGatherContext(question);
@@ -1932,14 +1944,33 @@ ${textContext}
 
   aiSearchConversation.push({ role: 'user', parts });
 
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: aiSearchConversation, generationConfig: { temperature: 0.2 } })
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 45000); // 45초 넘으면 자동 중단
+  let res;
+  try {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents: aiSearchConversation, generationConfig: { temperature: 0.2, maxOutputTokens: 2048 } }),
+      signal: controller.signal
+    });
+  } catch(e) {
+    aiSearchConversation.pop();
+    if(e.name === 'AbortError') throw new Error('응답이 너무 오래 걸려서 중단했어요. 다시 질문해주세요.');
+    throw e;
+  } finally {
+    clearTimeout(timeoutId);
+  }
   if(!res.ok) { aiSearchConversation.pop(); throw new Error('Gemini API 오류: ' + res.status); }
   const data = await res.json();
-  const answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '답변을 생성하지 못했어요.';
+  let answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '답변을 생성하지 못했어요.';
+
+  // 모델이 같은 문장을 반복하는 루프에 빠진 비정상 응답인지 확인
+  if(aiSearchIsDegenerate(answer)) {
+    aiSearchConversation.pop();
+    throw new Error('AI가 응답을 만들다가 같은 내용을 반복하는 오류가 있었어요. 다시 질문해주세요.');
+  }
+
   aiSearchConversation.push({ role: 'model', parts: [{ text: answer }] });
 
   return { answer, relMsgs, relEvents, relWeekly, relFolders, relDocs };
