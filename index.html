@@ -4489,13 +4489,24 @@ function renderLibraryGrid(docs, storageType, searchQ='') {
 }
 
 async function loadLibraryThumbs() {
-  const imgs = document.querySelectorAll('.lib-thumb');
-  for(const img of imgs) {
-    const path = img.dataset.path;
-    if(!path) continue;
-    const url = await getLibraryFileUrl(path);
-    if(url) img.src = url;
+  const imgs = Array.from(document.querySelectorAll('.lib-thumb'));
+  const concurrency = 6; // 한 번에 6장씩 동시 로드 (너무 많이 한꺼번에 보내면 부담될 수 있어 적당히 제한)
+  let idx = 0;
+  async function worker() {
+    while(idx < imgs.length) {
+      const img = imgs[idx++];
+      const path = img.dataset.path;
+      if(!path) continue;
+      try {
+        const url = await getLibraryFileUrl(path);
+        if(url) img.src = url;
+      } catch(e) {
+        console.warn('썸네일 로드 실패:', path, e);
+        // 하나 실패해도 나머지는 계속 진행 (이전엔 여기서 전체가 멈췄음)
+      }
+    }
   }
+  await Promise.all(Array.from({ length: concurrency }, worker));
 }
 
 let libPendingFile = null;
