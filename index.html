@@ -1614,28 +1614,62 @@ function renderSearchView(el) {
 }
 
 // ===== AI 검색 페이지 (Gemini, 텍스트+도면 이미지 분석) =====
-function renderAiSearchView(el) {
-  if(!el.querySelector('.ai-search-wrap')) {
-    el.innerHTML = `
-      <div class="ai-search-wrap" style="max-width:760px;margin:0 auto;display:flex;flex-direction:column;padding-bottom:90px">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px">
-          <span style="font-size:14px;font-weight:700;color:#6d28d9">🤖 AI에게 물어보기</span>
-          <span style="font-size:12px;color:#8b5cf6">메시지·일정·주간업무일지·도면을 분석해서 답변해요</span>
-          <button onclick="openAiSearchList()" style="margin-left:auto;background:transparent;border:1px solid #c4b5fd;color:#7c3aed;border-radius:7px;padding:4px 12px;font-size:12px;cursor:pointer;font-weight:700">📋 대화 목록</button>
-          <button onclick="aiSearchReset()" style="background:transparent;border:1px solid #c4b5fd;color:#7c3aed;border-radius:7px;padding:4px 12px;font-size:12px;cursor:pointer;font-weight:700">🔄 새 대화</button>
-        </div>
-        <div id="ai-search-answer" style="flex:1"></div>
+function aiSearchEmptyHTML() {
+  return `
+    <div class="ai-search-wrap is-empty" style="max-width:760px;margin:0 auto;min-height:calc(100vh - 180px);display:flex;flex-direction:column;align-items:center;justify-content:center">
+      <div style="text-align:center;margin-bottom:20px">
+        <div style="font-size:30px;margin-bottom:8px">🤖</div>
+        <div style="font-size:16px;font-weight:700;color:#6d28d9">AI에게 물어보세요</div>
+        <div style="font-size:12px;color:#8b5cf6;margin-top:4px">메시지·일정·주간업무일지·도면을 분석해서 답변해요</div>
       </div>
-      <div class="ai-fixed-input">
-        <div style="max-width:760px;margin:0 auto;display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid #c4b5fd;border-radius:14px;padding:6px 6px 6px 16px;box-shadow:0 6px 24px rgba(109,40,217,.14)">
-          <span style="font-size:15px">🤖</span>
-          <input id="ai-search-input" placeholder="AI에게 물어보기" style="flex:1;border:none;background:transparent;font-size:13px;color:var(--text);outline:none">
-          <button id="ai-search-btn" onclick="runAiSearch()" style="background:#7c3aed;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">질문하기</button>
-        </div>
-      </div>`;
-    const aiInp = el.querySelector('#ai-search-input');
+      <div style="width:100%;display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid #c4b5fd;border-radius:14px;padding:6px 6px 6px 16px;box-shadow:0 6px 24px rgba(109,40,217,.14)">
+        <span style="font-size:15px">🤖</span>
+        <input id="ai-search-input" placeholder="AI에게 물어보기" style="flex:1;border:none;background:transparent;font-size:13px;color:var(--text);outline:none">
+        <button id="ai-search-btn" onclick="runAiSearch()" style="background:#7c3aed;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">질문하기</button>
+      </div>
+      <button onclick="openAiSearchList()" style="margin-top:14px;background:transparent;border:1px solid #c4b5fd;color:#7c3aed;border-radius:7px;padding:5px 14px;font-size:12px;cursor:pointer;font-weight:700">📋 지난 대화 보기</button>
+    </div>`;
+}
+
+function aiSearchActiveHTML() {
+  return `
+    <div class="ai-search-wrap" style="max-width:760px;margin:0 auto;display:flex;flex-direction:column;padding-bottom:90px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:14px">
+        <span style="font-size:14px;font-weight:700;color:#6d28d9">🤖 AI에게 물어보기</span>
+        <span style="font-size:12px;color:#8b5cf6">메시지·일정·주간업무일지·도면을 분석해서 답변해요</span>
+        <button onclick="openAiSearchList()" style="margin-left:auto;background:transparent;border:1px solid #c4b5fd;color:#7c3aed;border-radius:7px;padding:4px 12px;font-size:12px;cursor:pointer;font-weight:700">📋 대화 목록</button>
+        <button onclick="aiSearchReset()" style="background:transparent;border:1px solid #c4b5fd;color:#7c3aed;border-radius:7px;padding:4px 12px;font-size:12px;cursor:pointer;font-weight:700">🔄 새 대화</button>
+      </div>
+      <div id="ai-search-answer" style="flex:1"></div>
+    </div>
+    <div class="ai-fixed-input">
+      <div style="max-width:760px;margin:0 auto;display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid #c4b5fd;border-radius:14px;padding:6px 6px 6px 16px;box-shadow:0 6px 24px rgba(109,40,217,.14)">
+        <span style="font-size:15px">🤖</span>
+        <input id="ai-search-input" placeholder="AI에게 물어보기" style="flex:1;border:none;background:transparent;font-size:13px;color:var(--text);outline:none">
+        <button id="ai-search-btn" onclick="runAiSearch()" style="background:#7c3aed;color:#fff;border:none;border-radius:10px;padding:9px 18px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap">질문하기</button>
+      </div>
+    </div>`;
+}
+
+function aiSearchAttachInputHandlers() {
+  const aiInp = document.getElementById('ai-search-input');
+  if(aiInp) {
     aiInp.addEventListener('keydown', function(e) { if(e.key === 'Enter') runAiSearch(); });
     setTimeout(() => aiInp.focus(), 50);
+  }
+}
+
+// 빈 상태(중앙 배치) -> 활성 상태(하단 고정)로 전환. 이미 활성 상태면 아무것도 안 함
+function aiSearchSwitchToActive(el) {
+  if(el.querySelector('.ai-fixed-input')) return;
+  el.innerHTML = aiSearchActiveHTML();
+  aiSearchAttachInputHandlers();
+}
+
+function renderAiSearchView(el) {
+  if(!el.querySelector('.ai-search-wrap')) {
+    el.innerHTML = aiSearchEmptyHTML();
+    aiSearchAttachInputHandlers();
     // 도면/문서 자료를 AI 검색이 참고할 수 있도록 미리 로드 (이미 로드돼 있으면 생략)
     if(typeof inspectionDocs !== 'undefined' && inspectionDocs.length === 0) {
       loadAllLibraryDocs().catch(e => console.warn('문서 로드 실패', e));
@@ -1646,9 +1680,10 @@ function renderAiSearchView(el) {
     if(aiSearchWeeklyCache === null) {
       loadAiSearchWeeklyData();
     }
-    // 현재 진행 중이던 대화 이어서 불러오기 (대화 자체는 "새 대화" 눌러야만 바뀜)
+    // 현재 진행 중이던 대화가 있으면 활성 레이아웃으로 전환해서 이어서 불러오기
     loadAiSearchHistory(ensureAiConversationId()).then(history => {
       if(!history.length) return;
+      aiSearchSwitchToActive(el);
       const answerEl = document.getElementById('ai-search-answer');
       if(!answerEl) return;
       history.forEach(h => {
@@ -1666,8 +1701,9 @@ function renderAiSearchView(el) {
     }).catch(e => console.warn('AI 검색 히스토리 로드 실패', e));
   }
 
-  // 대시보드에서 질문을 입력하고 넘어온 경우, 자동으로 채워서 실행
+  // 대시보드에서 질문을 입력하고 넘어온 경우, 활성 레이아웃으로 전환하고 자동 실행
   if(pendingAiSearchQuery) {
+    aiSearchSwitchToActive(el);
     const q = pendingAiSearchQuery;
     pendingAiSearchQuery = null;
     const aiInp = document.getElementById('ai-search-input');
@@ -1816,8 +1852,11 @@ function aiSearchReset() {
   aiSearchConversation = [];
   currentAiConversationId = genUUID();
   localStorage.setItem('hj_ai_conv_id', currentAiConversationId);
-  const answerEl = document.getElementById('ai-search-answer');
-  if(answerEl) answerEl.innerHTML = '';
+  const mainEl = document.getElementById('main-content');
+  if(mainEl) {
+    mainEl.innerHTML = aiSearchEmptyHTML();
+    aiSearchAttachInputHandlers();
+  }
   showToast('🔄 새 대화를 시작했어요');
 }
 
@@ -1825,6 +1864,8 @@ async function openAiSearchConversation(convId) {
   currentAiConversationId = convId;
   localStorage.setItem('hj_ai_conv_id', convId);
   aiSearchConversation = [];
+  const mainEl = document.getElementById('main-content');
+  if(mainEl) aiSearchSwitchToActive(mainEl); // 빈 상태였으면 활성 레이아웃으로 전환
   const answerEl = document.getElementById('ai-search-answer');
   if(answerEl) answerEl.innerHTML = '';
   const history = await loadAiSearchHistory(convId);
@@ -1840,6 +1881,7 @@ async function openAiSearchConversation(convId) {
     aiSearchConversation.push({ role:'user', parts:[{ text: h.question }] });
     aiSearchConversation.push({ role:'model', parts:[{ text: h.answer }] });
   });
+  aiSearchScrollToBottom();
   closeAiSearchList();
 }
 
@@ -1992,10 +2034,18 @@ ${textContext}
 }
 
 async function runAiSearch() {
-  const inp = document.getElementById('ai-search-input');
-  const q = inp ? inp.value.trim() : '';
+  const inpEl = document.getElementById('ai-search-input');
+  const q = inpEl ? inpEl.value.trim() : '';
   if(!q) return;
-  inp.value = '';
+
+  // 빈 상태(중앙 배치)였다면 활성 레이아웃(하단 고정)으로 전환
+  const mainEl = document.getElementById('main-content');
+  if(mainEl && mainEl.querySelector('.ai-search-wrap.is-empty')) {
+    aiSearchSwitchToActive(mainEl);
+  }
+
+  const inp = document.getElementById('ai-search-input'); // 전환됐을 수 있으니 다시 조회
+  if(inp) inp.value = '';
   const answerEl = document.getElementById('ai-search-answer');
   const btn = document.getElementById('ai-search-btn');
   btn.disabled = true; btn.textContent = '⏳ 분석 중...';
