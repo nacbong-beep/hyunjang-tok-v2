@@ -2858,6 +2858,55 @@ function jumpToMonth(monthStr) {
 function formatWeekDate(d) {
   return `${d.getFullYear()}/${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')}`;
 }
+function formatWeekDateShort(d) {
+  return `${d.getMonth()+1}/${d.getDate()}`;
+}
+
+function renderWeeklyDateNav(mon, sat, jumpYearOptions, jumpMonthOptions, isNarrow) {
+  if(isNarrow) {
+    return `
+      <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+        <button onclick="weeklyOffset--;renderWeeklyView(document.getElementById('main-content'))" class="btn-ghost" style="padding:5px 10px;font-size:13px">◀</button>
+        <span style="font-size:15px;font-weight:900;letter-spacing:-.3px;color:var(--text);white-space:nowrap">${formatWeekDateShort(mon)} ~ ${formatWeekDateShort(sat)}</span>
+        <button onclick="weeklyOffset++;renderWeeklyView(document.getElementById('main-content'))" class="btn-ghost" style="padding:5px 10px;font-size:13px">▶</button>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px">
+        <button onclick="weeklyOffset=0;renderWeeklyView(document.getElementById('main-content'))" class="btn-ghost" style="padding:5px 10px;font-size:12px;white-space:nowrap">이번주</button>
+        <select id="jump-year" onchange="jumpToMonth(this.value+'-'+document.getElementById('jump-month').value.padStart(2,'0'))" class="btn-ghost" style="padding:5px 4px;font-size:12px;border-radius:9px;cursor:pointer">${jumpYearOptions}</select>
+        <select id="jump-month" onchange="jumpToMonth(document.getElementById('jump-year').value+'-'+this.value.padStart(2,'0'))" class="btn-ghost" style="padding:5px 4px;font-size:12px;border-radius:9px;cursor:pointer">${jumpMonthOptions}</select>
+      </div>`;
+  }
+  return `
+        <div style="display:flex;align-items:center;gap:8px">
+          <button onclick="weeklyOffset--;renderWeeklyView(document.getElementById('main-content'))" class="btn-ghost" style="padding:5px 10px;font-size:13px">◀</button>
+          <span style="font-size:14px;font-weight:900;letter-spacing:-.3px;color:var(--text)">${formatWeekDate(mon)} ~ ${formatWeekDate(sat)}</span>
+          <button onclick="weeklyOffset++;renderWeeklyView(document.getElementById('main-content'))" class="btn-ghost" style="padding:5px 10px;font-size:13px">▶</button>
+          <button onclick="weeklyOffset=0;renderWeeklyView(document.getElementById('main-content'))" class="btn-ghost" style="padding:5px 10px;font-size:12px">이번주</button>
+          <select id="jump-year" onchange="jumpToMonth(this.value+'-'+document.getElementById('jump-month').value.padStart(2,'0'))" class="btn-ghost" style="padding:5px 4px;font-size:12px;border-radius:9px;cursor:pointer">${jumpYearOptions}</select>
+          <select id="jump-month" onchange="jumpToMonth(document.getElementById('jump-year').value+'-'+this.value.padStart(2,'0'))" class="btn-ghost" style="padding:5px 4px;font-size:12px;border-radius:9px;cursor:pointer">${jumpMonthOptions}</select>
+        </div>`;
+}
+
+function renderWeeklyActionBar(isNarrow) {
+  if(isNarrow) {
+    return `
+      <div style="display:flex;gap:6px;width:100%">
+        <button onclick="exportWeeklyExcel()" class="btn-ghost" style="flex:1;padding:9px 4px;font-size:16px" title="엑셀">📥</button>
+        <button onclick="copyWeeklyText()" class="btn-ghost" style="flex:1;padding:9px 4px;font-size:16px" title="복사">📋</button>
+        <button onclick="shareWeeklyImage()" class="btn-ghost" style="flex:1;padding:9px 4px;font-size:16px" title="이미지">🖼️</button>
+        <button onclick="toggleWeeklySearch()" class="btn-ghost" style="flex:1;padding:9px 4px;font-size:16px" title="검색">🔍</button>
+        <button id="weekly-save-btn" onclick="saveWeeklyAll()" class="btn-primary" style="flex:1.4;padding:9px 4px;font-size:12px;background:#10b981;white-space:nowrap">💾 저장</button>
+      </div>`;
+  }
+  return `
+        <div style="display:flex;gap:8px">
+          <button onclick="exportWeeklyExcel()" class="btn-ghost" style="padding:7px 12px;font-size:12px">📥 엑셀</button>
+          <button onclick="copyWeeklyText()" class="btn-ghost" style="padding:7px 12px;font-size:12px">📋 복사</button>
+          <button onclick="shareWeeklyImage()" class="btn-ghost" style="padding:7px 12px;font-size:12px">🖼️ 이미지</button>
+          <button onclick="toggleWeeklySearch()" class="btn-ghost" style="padding:7px 12px;font-size:12px">🔍 검색</button>
+          <button id="weekly-save-btn" onclick="saveWeeklyAll()" class="btn-primary" style="padding:7px 14px;font-size:12px;background:#10b981">💾 저장</button>
+        </div>`;
+}
 
 // 하위 카테고리의 상위 카테고리 찾기
 function getParentCatName(category) {
@@ -3269,24 +3318,13 @@ async function renderWeeklyView(el) {
 
 
 
+  const isNarrowScreen = window.innerWidth <= 500;
+
   el.innerHTML = `
     <div class="panel" style="margin-bottom:0">
-      <div class="panel-head" style="flex-wrap:wrap;gap:12px">
-        <div style="display:flex;align-items:center;gap:8px">
-          <button onclick="weeklyOffset--;renderWeeklyView(document.getElementById('main-content'))" class="btn-ghost" style="padding:5px 10px;font-size:13px">◀</button>
-          <span style="font-size:14px;font-weight:900;letter-spacing:-.3px;color:var(--text)">${formatWeekDate(mon)} ~ ${formatWeekDate(sat)}</span>
-          <button onclick="weeklyOffset++;renderWeeklyView(document.getElementById('main-content'))" class="btn-ghost" style="padding:5px 10px;font-size:13px">▶</button>
-          <button onclick="weeklyOffset=0;renderWeeklyView(document.getElementById('main-content'))" class="btn-ghost" style="padding:5px 10px;font-size:12px">이번주</button>
-          <select id="jump-year" onchange="jumpToMonth(this.value+'-'+document.getElementById('jump-month').value.padStart(2,'0'))" class="btn-ghost" style="padding:5px 4px;font-size:12px;border-radius:9px;cursor:pointer">${jumpYearOptions}</select>
-          <select id="jump-month" onchange="jumpToMonth(document.getElementById('jump-year').value+'-'+this.value.padStart(2,'0'))" class="btn-ghost" style="padding:5px 4px;font-size:12px;border-radius:9px;cursor:pointer">${jumpMonthOptions}</select>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button onclick="exportWeeklyExcel()" class="btn-ghost" style="padding:7px 12px;font-size:12px">📥 엑셀</button>
-          <button onclick="copyWeeklyText()" class="btn-ghost" style="padding:7px 12px;font-size:12px">📋 복사</button>
-          <button onclick="shareWeeklyImage()" class="btn-ghost" style="padding:7px 12px;font-size:12px">🖼️ 이미지</button>
-          <button onclick="toggleWeeklySearch()" class="btn-ghost" style="padding:7px 12px;font-size:12px">🔍 검색</button>
-          <button id="weekly-save-btn" onclick="saveWeeklyAll()" class="btn-primary" style="padding:7px 14px;font-size:12px;background:#10b981">💾 저장</button>
-        </div>
+      <div class="panel-head" style="flex-wrap:wrap;gap:12px${isNarrowScreen?';flex-direction:column;align-items:stretch':''}">
+        ${renderWeeklyDateNav(mon, sat, jumpYearOptions, jumpMonthOptions, isNarrowScreen)}
+        ${renderWeeklyActionBar(isNarrowScreen)}
       </div>
       <div id="weekly-search-bar" style="display:none;padding:0 0 14px">
         <div style="display:flex;gap:8px;align-items:center">
