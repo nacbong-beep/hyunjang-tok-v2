@@ -996,13 +996,17 @@ function renderDashboard(el) {
     ? `오늘 확인하실 게 ${briefingItems.length}가지예요.`
     : `오늘은 특별히 급하게 처리할 일이 없어요 👍`;
 
+  const weekDays = ['일','월','화','수','목','금','토'];
+  const dateLabel = `${today.getFullYear()}년 ${today.getMonth()+1}월 ${today.getDate()}일 ${weekDays[today.getDay()]}요일`;
+
   const briefingHtml = `
-    <div style="background:linear-gradient(135deg,#eff6ff,#f5f3ff);border:1px solid #dbeafe;border-radius:var(--radius);padding:18px 20px;margin-bottom:20px">
+    <div style="background:linear-gradient(135deg,#eff6ff,#f5f3ff);border:1px solid #dbeafe;border-radius:var(--radius);padding:18px 20px;margin-bottom:14px">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <span style="font-size:11px;font-weight:700;color:#6366f1">${dateLabel}</span>
         <span style="font-size:13px;font-weight:700;color:#3730a3">✨ 오늘의 브리핑</span>
       </div>
-      <p style="font-size:15px;line-height:1.6;margin:0 0 ${briefingItems.length?'14px':'0'};color:var(--text);font-weight:500">${briefingSummary}</p>
-      ${briefingItems.length ? `<div style="display:flex;flex-direction:column;gap:8px">
+      <p style="font-size:15px;line-height:1.6;margin:0;color:var(--text);font-weight:500">${briefingSummary}</p>
+      ${briefingItems.length ? `<div style="display:flex;flex-direction:column;gap:8px;margin-top:14px">
         ${briefingItems.map(i => `
           <div onclick="${i.onclick}" style="display:flex;align-items:center;gap:10px;background:var(--card);border-radius:10px;padding:10px 12px;cursor:pointer">
             <span style="font-size:16px">${i.icon}</span>
@@ -1010,12 +1014,12 @@ function renderDashboard(el) {
             <span style="font-size:11px;font-weight:700;color:${i.color};background:${i.bg};padding:3px 9px;border-radius:20px;white-space:nowrap">${i.tag}</span>
           </div>`).join('')}
       </div>` : ''}
-      <div style="display:flex;align-items:center;gap:8px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(99,102,241,.18)">
-        <span style="font-size:14px">🤖</span>
-        <input id="dash-ai-input" placeholder="AI에게 물어보기 (예: 302동 타설 일정 알려줘)"
-          onkeydown="if(event.key==='Enter') dashboardAiSearchSubmit(this.value)"
-          style="flex:1;border:1px solid #c4b5fd;border-radius:8px;padding:8px 12px;font-size:13px;background:var(--card);color:var(--text);outline:none">
-      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;background:var(--card);border:1.5px solid #c4b5fd;border-radius:var(--radius);padding:12px 16px;margin-bottom:20px">
+      <span style="font-size:15px">🤖</span>
+      <input id="dash-ai-input" placeholder="AI에게 물어보기"
+        onkeydown="if(event.key==='Enter') dashboardAiSearchSubmit(this.value)"
+        style="flex:1;border:none;padding:4px 0;font-size:13px;background:transparent;color:var(--text);outline:none;text-align:center">
     </div>`;
 
   el.innerHTML = `
