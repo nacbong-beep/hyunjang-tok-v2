@@ -4558,7 +4558,7 @@ function handleLibraryBulkSelect(fileList, storageType) {
         </select>
         <div style="display:flex;gap:8px;justify-content:flex-end">
           <button onclick="document.getElementById('lib-bulk-cat-modal').remove()" class="btn-ghost" style="padding:8px 16px;font-size:13px">취소</button>
-          <button onclick="confirmLibraryBulkUpload(${JSON.stringify(files.map(f=>f.name))}, '${storageType}')" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer">업로드 시작</button>
+          <button onclick="confirmLibraryBulkUpload('${storageType}')" style="background:var(--primary);color:#fff;border:none;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:700;cursor:pointer">업로드 시작</button>
         </div>
       </div>
     </div>`);
@@ -4567,7 +4567,7 @@ function handleLibraryBulkSelect(fileList, storageType) {
   window._libBulkFiles = files;
 }
 
-async function confirmLibraryBulkUpload(fileNames, storageType) {
+async function confirmLibraryBulkUpload(storageType) {
   const category = document.getElementById('lib-bulk-cat-select').value;
   const files = window._libBulkFiles || [];
   document.getElementById('lib-bulk-cat-modal').remove();
