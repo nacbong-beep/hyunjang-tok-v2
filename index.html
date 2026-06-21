@@ -540,9 +540,11 @@ body.is-mobile-device .dash-ai-bar{display:none!important}
     <div class="modal-title">📋 메시지 수정</div>
     <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">제목/요약</label>
     <input class="modal-input" id="msg-event-summary" placeholder="일정 제목" />
+    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">발신자</label>
+    <input class="modal-input" id="msg-event-sender" placeholder="발신자 이름" />
     <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">대화 날짜 <span style="font-weight:400;color:var(--soft)">(카톡 대화가 오간 날)</span></label>
     <input class="modal-input" id="msg-event-date" type="date" />
-    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">일정 날짜 <span style="font-weight:400;color:var(--soft)">(메시지 내용에 해당하는 날, 없으면 비워두세요)</span></label>
+    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">일정 날짜 <span style="font-weight:400;color:var(--soft)">(메시지 내용에 해당하는 날, 없으면 비움)</span></label>
     <input class="modal-input" id="msg-event-eventdate" type="date" />
     <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">태그</label>
     <select class="modal-input" id="msg-event-tag" style="cursor:pointer">
@@ -5508,6 +5510,7 @@ function openEditMsgEvent(id) {
   if(!m) return;
   editingMsgId = id;
   document.getElementById('msg-event-summary').value = m.summary||'';
+  document.getElementById('msg-event-sender').value = m.sender||'';
   document.getElementById('msg-event-date').value = m.messageDate||'';
   document.getElementById('msg-event-eventdate').value = m.eventDate||'';
   document.getElementById('msg-event-tag').value = normalizeTag(m.tag)||'일정';
@@ -5524,12 +5527,13 @@ function closeMsgEventModal() {
 function saveMsgEvent() {
   if(!editingMsgId) return;
   const summary = document.getElementById('msg-event-summary').value.trim();
+  const sender = document.getElementById('msg-event-sender').value.trim();
   const date = document.getElementById('msg-event-date').value;
   const eventDate = document.getElementById('msg-event-eventdate').value;
   const tag = document.getElementById('msg-event-tag').value;
   const content = document.getElementById('msg-event-content').value.trim();
   if(!summary) { showToast('제목을 입력해주세요'); return; }
-  messages = messages.map(m=>m.id===editingMsgId?{...m,summary,messageDate:date,eventDate:eventDate||null,tag,content}:m);
+  messages = messages.map(m=>m.id===editingMsgId?{...m,summary,sender,messageDate:date,eventDate:eventDate||null,tag,content}:m);
   save();
   closeMsgEventModal();
   showToast('✅ 수정됐어요!');
