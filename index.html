@@ -272,7 +272,7 @@ body.is-mobile-device .dash-ai-bar{display:none!important}
   .main{width:100%}
   .dashboard-summary{grid-template-columns:1fr 1fr}
   .header{padding:0 8px;min-height:48px;flex-wrap:nowrap;gap:4px}
-  .header-title{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px}
+  .header-title{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px}
   .header-actions{gap:4px;flex-shrink:0}
   .content{padding:10px}
   .btn-sm{display:none}
@@ -292,7 +292,7 @@ body.is-mobile-device .dash-ai-bar{display:none!important}
   .summary-card{padding:10px 8px}
   .card-num{font-size:22px}
   .summary-card-icon{font-size:16px;margin-bottom:4px}
-  .header-title{max-width:60px;font-size:12px}
+  .header-title{max-width:150px;font-size:12px}
   .btn-primary{padding:6px 8px;font-size:11px}
 }
 </style>
@@ -2890,12 +2890,12 @@ function renderWeeklyDateNav(mon, sat, jumpYearOptions, jumpMonthOptions, isNarr
 function renderWeeklyActionBar(isNarrow) {
   if(isNarrow) {
     return `
-      <div style="display:flex;gap:6px;width:100%">
-        <button onclick="exportWeeklyExcel()" class="btn-ghost" style="flex:1;padding:9px 4px;font-size:16px" title="엑셀">📥</button>
-        <button onclick="copyWeeklyText()" class="btn-ghost" style="flex:1;padding:9px 4px;font-size:16px" title="복사">📋</button>
-        <button onclick="shareWeeklyImage()" class="btn-ghost" style="flex:1;padding:9px 4px;font-size:16px" title="이미지">🖼️</button>
-        <button onclick="toggleWeeklySearch()" class="btn-ghost" style="flex:1;padding:9px 4px;font-size:16px" title="검색">🔍</button>
-        <button id="weekly-save-btn" onclick="saveWeeklyAll()" class="btn-primary" style="flex:1.4;padding:9px 4px;font-size:12px;background:#10b981;white-space:nowrap">💾 저장</button>
+      <div style="display:flex;gap:4px;width:100%;overflow-x:auto;padding-bottom:2px">
+        <button onclick="exportWeeklyExcel()" class="btn-ghost" style="flex-shrink:0;padding:6px 7px;font-size:10.5px;white-space:nowrap">📥 엑셀</button>
+        <button onclick="copyWeeklyText()" class="btn-ghost" style="flex-shrink:0;padding:6px 7px;font-size:10.5px;white-space:nowrap">📋 복사</button>
+        <button onclick="shareWeeklyImage()" class="btn-ghost" style="flex-shrink:0;padding:6px 7px;font-size:10.5px;white-space:nowrap">🖼️ 이미지</button>
+        <button onclick="toggleWeeklySearch()" class="btn-ghost" style="flex-shrink:0;padding:6px 7px;font-size:10.5px;white-space:nowrap">🔍 검색</button>
+        <button id="weekly-save-btn" onclick="saveWeeklyAll()" class="btn-primary" style="flex-shrink:0;padding:6px 11px;font-size:10.5px;background:#10b981;white-space:nowrap">💾 저장</button>
       </div>`;
   }
   return `
@@ -3340,6 +3340,7 @@ async function renderWeeklyView(el) {
         ? renderWeeklyDayCardSection(wk, days, weatherData)
         : renderWeeklyTableSection(wk, days, weatherData)}
     </div>`;
+  setTimeout(autoGrowWeeklyTextareas, 0);
 }
 
 let weeklySelectedDayIdx = null; // null이면 오늘(이번주 안에 있으면)로 자동 설정
@@ -3397,13 +3398,20 @@ function weeklyDayCardBodyHTML(wk, days, dIdx, weatherData) {
         return `
         <div style="margin-bottom:14px">
           <div style="font-size:11px;font-weight:700;color:var(--muted);margin-bottom:6px">${row}</div>
-          <textarea id="${cellId}" placeholder="입력..."
-            style="width:100%;min-height:70px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.6;background:var(--surface);color:var(--text);resize:vertical;outline:none;font-family:inherit"
-            oninput="setWeeklyCellLocal('${wk}','${row}','${d.key}',this.value)"
+          <textarea id="${cellId}" class="weekly-card-ta" placeholder="입력..."
+            style="width:100%;min-height:100px;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;line-height:1.6;background:var(--surface);color:var(--text);resize:vertical;outline:none;font-family:inherit;overflow:hidden"
+            oninput="setWeeklyCellLocal('${wk}','${row}','${d.key}',this.value);this.style.height='auto';this.style.height=this.scrollHeight+'px'"
             >${val}</textarea>
         </div>`;
       }).join('')}
     </div>`;
+}
+
+function autoGrowWeeklyTextareas() {
+  document.querySelectorAll('.weekly-card-ta').forEach(ta => {
+    ta.style.height = 'auto';
+    ta.style.height = ta.scrollHeight + 'px';
+  });
 }
 
 function switchWeeklyDay(idx) {
@@ -3412,6 +3420,7 @@ function switchWeeklyDay(idx) {
   if(!ctx) return;
   const wrap = document.getElementById('weekly-daycard-wrap');
   if(wrap) wrap.innerHTML = weeklyDayTabsHTML(ctx.days, idx) + weeklyDayCardBodyHTML(ctx.wk, ctx.days, idx, ctx.weatherData);
+  setTimeout(autoGrowWeeklyTextareas, 0);
 }
 
 function renderWeeklyTableSection(wk, days, weatherData) {
