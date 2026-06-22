@@ -2424,7 +2424,7 @@ function savePreview() {
     createdAt:now,isTodo:Boolean(item.isTodo),
   }));
   const newTodos=newMsgs.filter(m=>m.isTodo).map(m=>({
-    id:uid(),messageId:m.id,title:m.summary,tag:m.tag,roomName:m.roomName,
+    id:uid(),messageId:m.id,title:m.summary,tag:m.tag,roomName:m.roomName,sender:m.sender||'',
     dueDate:m.messageDate||addDaysKey(1),done:false,
   }));
   messages=[...newMsgs,...messages];
@@ -2530,12 +2530,14 @@ function msgItem(m,checked=false) {
 function todoItem(t) {
   const tag=normalizeTag(t.tag);
   const doneAt=t.doneAt?` · 완료 ${formatDate(t.doneAt)}`:'';
+  const m = messages.find(msg=>msg.id===t.messageId);
+  const sender = t.sender || (m && m.sender) || '';
   return `<div class="item ${t.done?'done':''}" style="display:flex;align-items:flex-start;gap:10px;cursor:default">
     <input type="checkbox" ${t.done?'checked':''} onclick="event.stopPropagation();toggleTodo('${t.id}')" style="margin-top:4px;width:16px;height:16px;flex-shrink:0;cursor:pointer">
     <div class="todo-click" style="flex:1;min-width:0" onclick="openTodoDetail('${t.id}')">
       <span class="badge ${badgeClass(tag)}">${tagIcon(tag)} ${tag}</span>
       <div class="item-title">${t.title}</div>
-      <div class="meta">${[formatDate(t.dueDate),t.sender,t.roomName].filter(Boolean).join(' · ')}${doneAt}</div>
+      <div class="meta">${[formatDate(t.dueDate),sender,t.roomName].filter(Boolean).join(' · ')}${doneAt}</div>
     </div>
   </div>`;
 }
@@ -2545,11 +2547,12 @@ function openTodoDetail(id) {
   if(!t) return;
   const tag = normalizeTag(t.tag);
   const m = messages.find(m=>m.id===t.messageId);
+  const sender = t.sender || (m && m.sender) || '';
   document.getElementById('todo-detail-content').innerHTML = `
     <span class="badge ${badgeClass(tag)}">${tagIcon(tag)} ${tag}</span>
     <div style="font-size:15px;font-weight:800;margin:10px 0 6px;line-height:1.5">${t.title}</div>
     ${m?`<div style="background:var(--bg);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--muted);line-height:1.7;margin-bottom:8px">${m.content||m.summary}</div>`:''}
-    <div class="meta">${[formatDate(t.dueDate),t.sender,t.roomName].filter(Boolean).join(' · ')}</div>
+    <div class="meta">${[formatDate(t.dueDate),sender,t.roomName].filter(Boolean).join(' · ')}</div>
   `;
   document.getElementById('todo-detail-done-btn').textContent = t.done ? '✅ 완료 취소' : '✅ 완료처리';
   document.getElementById('todo-detail-done-btn').onclick = () => { toggleTodo(id); closeTodoDetail(); };
