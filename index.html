@@ -954,15 +954,16 @@ function dashboardAiSearchSubmit(value) {
 function renderDashboard(el) {
   const today = new Date();
   const missedDays = appSettings.missedDays || 1;
+  const todayDk = todayKey();
+  const missedFromDk = addDaysKey(-(missedDays - 1));
   const missedInstr = messages.filter(m=>{
-    const d = new Date(m.createdAt);
-    const diff = (today - d) / (1000*60*60*24);
-    return normalizeTag(m.tag)==='지시사항' && diff >= 0 && diff < missedDays;
+    const dk = m.messageDate || (m.createdAt ? dateKey(new Date(m.createdAt)) : '');
+    return normalizeTag(m.tag)==='지시사항' && dk >= missedFromDk && dk <= todayDk;
   });
+  const noticFromDk = addDaysKey(-6);
   const notices = messages.filter(m=>{
-    const d = new Date(m.createdAt);
-    const diff = (today - d) / (1000*60*60*24);
-    return normalizeTag(m.tag)==='공지사항' && diff >= 0 && diff < 7;
+    const dk = m.messageDate || (m.createdAt ? dateKey(new Date(m.createdAt)) : '');
+    return normalizeTag(m.tag)==='공지사항' && dk >= noticFromDk && dk <= todayDk;
   });
   const calEvents = getCalendarEvents();
   const pending = todos.filter(t=>!t.done);
