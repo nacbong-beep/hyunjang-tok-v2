@@ -1576,12 +1576,14 @@ function renderTodoView(el) {
 function todoItemCheckable(t) {
   const tag=normalizeTag(t.tag);
   const isChecked = checkedTodos.has(t.id);
+  const m = messages.find(msg=>msg.id===t.messageId);
+  const sender = t.sender || (m && m.sender) || '';
   return `<div class="item" style="display:flex;gap:10px;align-items:flex-start;">
     <input type="checkbox" style="margin-top:4px;width:16px;height:16px;cursor:pointer;" ${isChecked?'checked':''} onchange="toggleCheck('${t.id}',this.checked)">
-    <div style="flex:1;cursor:pointer;" onclick="toggleTodo('${t.id}')">
+    <div style="flex:1;cursor:pointer;" onclick="openTodoDetail('${t.id}')">
       <span class="badge ${badgeClass(tag)}">${tagIcon(tag)} ${tag}</span>
       <div class="item-title">${t.title}</div>
-      <div class="meta">${[formatDate(t.dueDate),t.roomName].filter(Boolean).join(' · ')}</div>
+      <div class="meta">${[formatDate(t.dueDate),sender,t.roomName].filter(Boolean).join(' · ')}</div>
     </div>
   </div>`;
 }
