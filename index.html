@@ -5346,6 +5346,12 @@ async function checkIndexingStatus() {
           <div style="background:#10b981;height:100%;width:${totalCount?Math.round(indexedCount/totalCount*100):0}%;transition:width .3s"></div>
         </div>
         <div style="font-size:10px;color:var(--muted);margin-top:4px;text-align:right">${totalCount?Math.round(indexedCount/totalCount*100):0}% 완료</div>
+        ${remaining > 0 ? `<div style="margin-top:10px;padding:8px 10px;background:#fffbeb;border:1px solid #fcd34d;border-radius:7px;font-size:12px;color:#92400e">
+          ⚡ 인덱싱되지 않은 도면이 <strong>${remaining}장</strong> 있어요.<br>
+          아래 버튼을 눌러 인덱싱을 시작하세요. (${Math.ceil(remaining*4/60)}분 예상)
+        </div>` : `<div style="margin-top:10px;padding:8px 10px;background:#f0fdf4;border:1px solid #86efac;border-radius:7px;font-size:12px;color:#166534">
+          🎉 모든 도면 인덱싱이 완료됐어요!
+        </div>`}
       </div>`;
   } catch(e) {
     if(statusEl) statusEl.textContent = '현황을 불러올 수 없어요';
@@ -5368,8 +5374,10 @@ async function startLibraryIndexing(startIdx, onlyMissing=false) {
     await loadLibDocIndex();
     targets = allDocs.filter(d => !libDocIndexCache[d.id]);
   }
-  if(startIdx !== null && startIdx !== undefined) {
-    targets = targets.slice(startIdx, startIdx + 20);
+  // 한 번에 최대 20장만 처리 (egress/API 부담 최소화)
+  const BATCH_SIZE = 20;
+  if(targets.length > BATCH_SIZE) {
+    targets = targets.slice(0, BATCH_SIZE);
   }
 
   if(!targets.length) { showToast('✅ 인덱싱할 도면이 없어요'); return; }
@@ -5409,8 +5417,8 @@ async function startLibraryIndexing(startIdx, onlyMissing=false) {
 
   if(statusEl) statusEl.textContent = '';
   if(label) label.textContent = `완료 (${done-failed}/${targets.length})`;
-  showToast(`✅ 인덱싱 완료! ${done-failed}건 성공${failed?` · 실패 ${failed}건`:''}`);
-  checkIndexingStatus(); // 완료 후 현황 자동 갱신
+  showToast(`✅ 이번 배치 완료! ${done-failed}건 성공${failed?` · 실패 ${failed}건`:''}`);
+  checkIndexingStatus(); // 완료 후 현황 자동 갱신 (남은 장수 표시)
 }
 
 function renderSettingsView(el) {
@@ -5456,8 +5464,7 @@ function renderSettingsView(el) {
         <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">도면 이미지를 Gemini Vision으로 분석해서 내용(치수, 마감재, 층별 정보 등)을 텍스트로 저장해요. AI 검색 정확도가 크게 올라가요. 20장씩 나눠서 진행하세요.</div>
         <div style="display:flex;gap:8px;margin-bottom:8px">
           <button class="btn-ghost" style="flex:1" onclick="checkIndexingStatus()">📊 현황 확인</button>
-          <button class="btn-ghost" style="flex:1" onclick="startLibraryIndexing(null, true)">🔄 미완료만 처리</button>
-          <button class="btn-primary" style="flex:1" onclick="startLibraryIndexing(0)">▶ 처음부터</button>
+          <button class="btn-primary" style="flex:2" onclick="startLibraryIndexing(null, true)">▶ 인덱싱 시작 (미완료 처리)</button>
         </div>
         <div id="indexing-status" style="font-size:12px;color:var(--muted)"></div>
         <div id="indexing-progress-wrap" style="display:none;margin-top:8px">
@@ -5593,6 +5600,8 @@ function initMenuOrderList() {
   }
 
   render();
+  // 설정 페이지 진입 시 인덱싱 현황 자동 확인
+  setTimeout(() => checkIndexingStatus(), 300);
 }
 
 function saveProfileSettings() {
