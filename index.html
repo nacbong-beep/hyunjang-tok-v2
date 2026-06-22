@@ -5315,6 +5315,43 @@ async function analyzeDocWithGemini(doc) {
   return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
 }
 
+async function checkIndexingStatus() {
+  const statusEl = document.getElementById('indexing-status');
+  if(statusEl) statusEl.textContent = '조회 중...';
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  try {
+    const [docsRes, idxRes] = await Promise.all([
+      fetch(`${SUPABASE_URL}/rest/v1/library_docs?select=id`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, Prefer: 'count=exact' }
+      }),
+      fetch(`${SUPABASE_URL}/rest/v1/library_doc_index?select=doc_id`, {
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, Prefer: 'count=exact' }
+      })
+    ]);
+    const totalCount = parseInt(docsRes.headers.get('content-range')?.split('/')[1] || '0');
+    const indexedCount = parseInt(idxRes.headers.get('content-range')?.split('/')[1] || '0');
+    const remaining = totalCount - indexedCount;
+    if(statusEl) statusEl.innerHTML = `
+      <div style="background:var(--surface);border-radius:8px;padding:10px 12px;margin-top:4px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span>전체 도면</span><strong>${totalCount}장</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <span style="color:#10b981">✅ 인덱싱 완료</span><strong style="color:#10b981">${indexedCount}장</strong>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-bottom:8px">
+          <span style="color:${remaining>0?'#f59e0b':'var(--muted)'}">⏳ 미완료</span><strong style="color:${remaining>0?'#f59e0b':'var(--muted)'}">${remaining}장</strong>
+        </div>
+        <div style="background:var(--border);border-radius:4px;height:6px;overflow:hidden">
+          <div style="background:#10b981;height:100%;width:${totalCount?Math.round(indexedCount/totalCount*100):0}%;transition:width .3s"></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;text-align:right">${totalCount?Math.round(indexedCount/totalCount*100):0}% 완료</div>
+      </div>`;
+  } catch(e) {
+    if(statusEl) statusEl.textContent = '현황을 불러올 수 없어요';
+  }
+}
+
 async function startLibraryIndexing(startIdx, onlyMissing=false) {
   if(!geminiApiKey) { showToast('⚠️ Gemini API 키를 먼저 설정해주세요'); return; }
 
@@ -5346,20 +5383,34 @@ async function startLibraryIndexing(startIdx, onlyMissing=false) {
   let done = 0, failed = 0;
   for(const doc of targets) {
     if(label) label.textContent = `분석 중: ${doc.title||doc.file_name||doc.id} (${done+1}/${targets.length})`;
-    try {
-      const content = await analyzeDocWithGemini(doc);
+    let content = null;
+    for(let attempt = 0; attempt < 2; attempt++) {
+      try {
+        content = await analyzeDocWithGemini(doc);
+        break;
+      } catch(e) {
+        console.warn(`인덱싱 실패(${attempt+1}번째):`, doc.title, e.message);
+        if(attempt === 0) {
+          if(label) label.textContent = `재시도 중... (${doc.title||''})`;
+          await new Promise(r => setTimeout(r, 10000)); // 10초 후 재시도
+        }
+      }
+    }
+    if(content) {
       await saveDocIndex(doc.id, `[${doc.title||''}] [${doc.category||''}]\n${content}`);
-    } catch(e) {
-      console.warn('인덱싱 실패:', doc.title, e.message);
+    } else {
       failed++;
     }
     done++;
     if(bar) bar.style.width = Math.round(done/targets.length*100) + '%';
+    // Gemini 무료 분당 15건 제한 대비 - 요청 사이 4초 대기
+    if(done < targets.length) await new Promise(r => setTimeout(r, 4000));
   }
 
-  if(statusEl) statusEl.textContent = `완료: ${done-failed}건 성공, ${failed}건 실패`;
+  if(statusEl) statusEl.textContent = '';
   if(label) label.textContent = `완료 (${done-failed}/${targets.length})`;
   showToast(`✅ 인덱싱 완료! ${done-failed}건 성공${failed?` · 실패 ${failed}건`:''}`);
+  checkIndexingStatus(); // 완료 후 현황 자동 갱신
 }
 
 function renderSettingsView(el) {
@@ -5403,9 +5454,10 @@ function renderSettingsView(el) {
       <div class="panel">
         <div class="panel-head"><div class="panel-title">🗂️ 도면 AI 인덱싱</div></div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">도면 이미지를 Gemini Vision으로 분석해서 내용(치수, 마감재, 층별 정보 등)을 텍스트로 저장해요. AI 검색 정확도가 크게 올라가요. 20장씩 나눠서 진행하세요.</div>
-        <div style="display:flex;gap:8px;margin-bottom:10px">
-          <button class="btn-primary" onclick="startLibraryIndexing(0)" style="flex:1">▶ 처음부터 인덱싱 시작</button>
-          <button class="btn-ghost" onclick="startLibraryIndexing(null, true)" style="flex:1">🔄 미완료만 재시도</button>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button class="btn-ghost" style="flex:1" onclick="checkIndexingStatus()">📊 현황 확인</button>
+          <button class="btn-ghost" style="flex:1" onclick="startLibraryIndexing(null, true)">🔄 미완료만 처리</button>
+          <button class="btn-primary" style="flex:1" onclick="startLibraryIndexing(0)">▶ 처음부터</button>
         </div>
         <div id="indexing-status" style="font-size:12px;color:var(--muted)"></div>
         <div id="indexing-progress-wrap" style="display:none;margin-top:8px">
