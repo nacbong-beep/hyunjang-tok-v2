@@ -1803,7 +1803,11 @@ function aiSearchGatherContext(question) {
 
   const relFolders = rank(typeof inspectionFolders !== 'undefined' ? inspectionFolders : [], f => matchScore(f.title || ''), 5);
   const docPool = (typeof inspectionDocs !== 'undefined' && inspectionDocs.length) ? inspectionDocs : libraryDocs;
-  const relDocs = rank(docPool, d => matchScore([d.title, d.category, d.memo].join(' ')), 4);
+  const relDocs = rank(docPool, d => {
+    const titleScore = matchScore([d.title, d.category, d.memo].join(' '));
+    const indexScore = libDocIndexCache[d.id] ? matchScore(libDocIndexCache[d.id]) * 2 : 0;
+    return titleScore + indexScore;
+  }, 4);
 
   return { relMsgs, relEvents, relWeekly, relFolders, relDocs, dateRelatedTodos };
 }
@@ -2049,9 +2053,11 @@ ${relWeekly.map(r => `- (${r.date_key}) ${r.row_name}: ${r.content}`).join('\n')
 [검측요청서 폴더]
 ${relFolders.map(f => `- ${f.title}`).join('\n') || '(관련 검측요청서 폴더 없음)'}
 
-[첨부 도면/문서]
-${relDocs.map(d => `- ${d.title} (${d.category||''})`).join('\n') || '(관련 도면 없음)'}`;
-
+[첨부 도면/문서 - 이미지를 직접 읽어서 치수·마감재 등 정보를 답변에 활용하세요]
+${relDocs.map(d => {
+  const idx = libDocIndexCache[d.id];
+  return `- ${d.title} (${d.category||''})${idx ? '\n  [인덱스] ' + idx.replace(/\n/g,' | ').slice(0,300) : ''}`;
+}).join('\n') || '(관련 도면 없음)'}`;
   const prompt = isFirstTurn
     ? `당신은 건설현장 정보 비서입니다. 아래 텍스트 자료와 첨부된 도면 이미지를 참고해서 질문에 답하세요.
 이미지에 치수, 두께, 마감재 정보 등이 적혀 있으면 이미지를 직접 읽어서 정확히 답변하세요.
@@ -5247,6 +5253,115 @@ function popoutLibraryDoc() {
   libFloatWin.focus();
 }
 
+// ===== 도면 AI 인덱싱 =====
+let libDocIndexCache = {}; // doc_id -> content (세션 내 캐시)
+
+async function loadLibDocIndex() {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/library_doc_index?select=doc_id,content`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+    });
+    if(res.ok) {
+      const rows = await res.json();
+      rows.forEach(r => { libDocIndexCache[r.doc_id] = r.content; });
+    }
+  } catch(e) { console.warn('인덱스 로드 실패', e); }
+}
+
+async function saveDocIndex(docId, content) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  try {
+    await fetch(`${SUPABASE_URL}/rest/v1/library_doc_index`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates'
+      },
+      body: JSON.stringify({ doc_id: docId, content, indexed_at: new Date().toISOString() })
+    });
+    libDocIndexCache[docId] = content;
+  } catch(e) { console.warn('인덱스 저장 실패', e); }
+}
+
+async function analyzeDocWithGemini(doc) {
+  if(!geminiApiKey) throw new Error('Gemini API 키를 설정해주세요.');
+  const url = await getLibraryFileUrl(doc.file_path);
+  if(!url) throw new Error('파일 URL을 가져올 수 없어요.');
+  const base64 = await aiSearchUrlToBase64(url, doc.file_path);
+  const prompt = `이 건설 도면 이미지를 분석해서 아래 정보를 추출해주세요. 없는 항목은 생략하세요. 간결하게 핵심만 작성해주세요.
+
+- 도면 제목/도면 번호
+- 위치/층/동 정보 (예: 302동, 지하2층, 주차장 등)
+- 마감재 종류 및 두께 (예: 에폭시 t=2, 무근콘크리트 t=150 등)
+- 주요 치수 (FL, SL, 높이, 폭 등)
+- 공종/공사 종류 (예: ALC, 발코니, 필로티 등)
+- 기타 중요 정보`;
+
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      contents: [{ parts: [
+        { text: prompt },
+        { inlineData: { mimeType: aiSearchGuessMime(doc.file_name||doc.file_path), data: base64 } }
+      ]}],
+      generationConfig: { temperature: 0, maxOutputTokens: 512 }
+    })
+  });
+  if(!res.ok) throw new Error('Gemini API 오류: ' + res.status);
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+}
+
+async function startLibraryIndexing(startIdx, onlyMissing=false) {
+  if(!geminiApiKey) { showToast('⚠️ Gemini API 키를 먼저 설정해주세요'); return; }
+
+  // 전체 도면 로드
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/library_docs?select=*&order=created_at.asc`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+  });
+  if(!res.ok) { showToast('도면 목록을 불러올 수 없어요'); return; }
+  const allDocs = await res.json();
+
+  let targets = allDocs;
+  if(onlyMissing) {
+    await loadLibDocIndex();
+    targets = allDocs.filter(d => !libDocIndexCache[d.id]);
+  }
+  if(startIdx !== null && startIdx !== undefined) {
+    targets = targets.slice(startIdx, startIdx + 20);
+  }
+
+  if(!targets.length) { showToast('✅ 인덱싱할 도면이 없어요'); return; }
+
+  const statusEl = document.getElementById('indexing-status');
+  const wrap = document.getElementById('indexing-progress-wrap');
+  const bar = document.getElementById('indexing-bar');
+  const label = document.getElementById('indexing-label');
+  if(wrap) wrap.style.display = 'block';
+
+  let done = 0, failed = 0;
+  for(const doc of targets) {
+    if(label) label.textContent = `분석 중: ${doc.title||doc.file_name||doc.id} (${done+1}/${targets.length})`;
+    try {
+      const content = await analyzeDocWithGemini(doc);
+      await saveDocIndex(doc.id, `[${doc.title||''}] [${doc.category||''}]\n${content}`);
+    } catch(e) {
+      console.warn('인덱싱 실패:', doc.title, e.message);
+      failed++;
+    }
+    done++;
+    if(bar) bar.style.width = Math.round(done/targets.length*100) + '%';
+  }
+
+  if(statusEl) statusEl.textContent = `완료: ${done-failed}건 성공, ${failed}건 실패`;
+  if(label) label.textContent = `완료 (${done-failed}/${targets.length})`;
+  showToast(`✅ 인덱싱 완료! ${done-failed}건 성공${failed?` · 실패 ${failed}건`:''}`);
+}
+
 function renderSettingsView(el) {
   el.innerHTML = `
     <div style="max-width:640px;display:flex;flex-direction:column;gap:16px">
@@ -5281,6 +5396,23 @@ function renderSettingsView(el) {
             <div id="gemini-models-result" style="margin-top:8px;font-size:11px;color:var(--muted);max-height:150px;overflow-y:auto"></div>
           </div>
           <div style="font-size:11px;color:var(--muted)">현재: ${aiEngine==='claude'?'Claude Haiku (Supabase Edge Function)':'Gemini Flash (직접 호출)'}</div>
+        </div>
+      </div>
+
+      <!-- 도면 인덱싱 -->
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">🗂️ 도면 AI 인덱싱</div></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">도면 이미지를 Gemini Vision으로 분석해서 내용(치수, 마감재, 층별 정보 등)을 텍스트로 저장해요. AI 검색 정확도가 크게 올라가요. 20장씩 나눠서 진행하세요.</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button class="btn-primary" onclick="startLibraryIndexing(0)" style="flex:1">▶ 처음부터 인덱싱 시작</button>
+          <button class="btn-ghost" onclick="startLibraryIndexing(null, true)" style="flex:1">🔄 미완료만 재시도</button>
+        </div>
+        <div id="indexing-status" style="font-size:12px;color:var(--muted)"></div>
+        <div id="indexing-progress-wrap" style="display:none;margin-top:8px">
+          <div style="background:var(--surface);border-radius:8px;height:8px;overflow:hidden;margin-bottom:6px">
+            <div id="indexing-bar" style="background:var(--primary);height:100%;width:0%;transition:width .15s"></div>
+          </div>
+          <div id="indexing-label" style="font-size:11px;color:var(--muted)"></div>
         </div>
       </div>
 
@@ -5905,8 +6037,8 @@ function initApp() {
     updateStats();
     renderSidebar();
     setView('dashboard');
-    // 카카오톡 공유 텍스트 처리
     handleSharedText();
+    loadLibDocIndex(); // 도면 AI 인덱스 미리 로드 (AI 검색 정확도 향상)
   });
 }
 
