@@ -2054,7 +2054,7 @@ async function runAiSearch() {
   }
 
   const inp = document.getElementById('ai-search-input'); // 전환됐을 수 있으니 다시 조회
-  if(inp) inp.value = '';
+  if(inp) { inp.value = ''; inp.blur(); } // blur()로 키보드 내려서 질문/분석중 화면이 보이도록
   const answerEl = document.getElementById('ai-search-answer');
   const btn = document.getElementById('ai-search-btn');
   btn.disabled = true; btn.textContent = '⏳ 분석 중...';
