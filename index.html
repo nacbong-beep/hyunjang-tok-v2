@@ -1679,6 +1679,7 @@ function renderAiSearchView(el) {
   if(!el.querySelector('.ai-search-wrap')) {
     el.innerHTML = aiSearchEmptyHTML();
     aiSearchAttachInputHandlers();
+    initAiInputViewportListener();
     // 도면/문서 자료를 AI 검색이 참고할 수 있도록 미리 로드 (이미 로드돼 있으면 생략)
     if(typeof inspectionDocs !== 'undefined' && inspectionDocs.length === 0) {
       loadAllLibraryDocs().catch(e => console.warn('문서 로드 실패', e));
@@ -1790,6 +1791,19 @@ let currentAiConversationId = localStorage.getItem('hj_ai_conv_id') || null;
 function aiSearchScrollToBottom() {
   const mc = document.getElementById('main-content');
   if(mc) mc.scrollTop = mc.scrollHeight;
+}
+
+// Visual Viewport API: 키보드 올라올 때 AI 입력창 위치 자동 조정 (Android 대응)
+function initAiInputViewportListener() {
+  if(!window.visualViewport) return;
+  const adjust = () => {
+    const el = document.querySelector('.ai-fixed-input');
+    if(!el) return;
+    const keyboardHeight = window.innerHeight - window.visualViewport.height;
+    el.style.bottom = keyboardHeight > 0 ? keyboardHeight + 'px' : '0';
+  };
+  window.visualViewport.addEventListener('resize', adjust);
+  window.visualViewport.addEventListener('scroll', adjust);
 }
 
 function genUUID() {
