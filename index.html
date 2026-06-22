@@ -5348,7 +5348,7 @@ async function checkIndexingStatus() {
         <div style="font-size:10px;color:var(--muted);margin-top:4px;text-align:right">${totalCount?Math.round(indexedCount/totalCount*100):0}% 완료</div>
         ${remaining > 0 ? `<div style="margin-top:10px;padding:8px 10px;background:#fffbeb;border:1px solid #fcd34d;border-radius:7px;font-size:12px;color:#92400e">
           ⚡ 인덱싱되지 않은 도면이 <strong>${remaining}장</strong> 있어요.<br>
-          아래 버튼을 눌러 인덱싱을 시작하세요. (${Math.ceil(remaining*4/60)}분 예상)
+          위 버튼을 눌러 20장씩 인덱싱을 진행하세요. (회당 약 1~2분 소요)
         </div>` : `<div style="margin-top:10px;padding:8px 10px;background:#f0fdf4;border:1px solid #86efac;border-radius:7px;font-size:12px;color:#166534">
           🎉 모든 도면 인덱싱이 완료됐어요!
         </div>`}
