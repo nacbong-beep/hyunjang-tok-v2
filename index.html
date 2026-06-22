@@ -2053,19 +2053,38 @@ async function runAiSearch() {
     aiSearchSwitchToActive(mainEl);
   }
 
-  const inp = document.getElementById('ai-search-input'); // 전환됐을 수 있으니 다시 조회
-  if(inp) { inp.value = ''; inp.blur(); } // blur()로 키보드 내려서 질문/분석중 화면이 보이도록
+  const inp = document.getElementById('ai-search-input');
+  if(inp) {
+    inp.value = '';
+    // Android에서 키보드 내리기 시도 (readonly 트릭)
+    inp.setAttribute('readonly', 'readonly');
+    inp.blur();
+    setTimeout(() => inp && inp.removeAttribute('readonly'), 200);
+  }
+  // 임시 포커스 트릭도 병행
+  const dummy = document.createElement('input');
+  dummy.setAttribute('type','text');
+  dummy.setAttribute('readonly','readonly');
+  dummy.style.cssText = 'position:fixed;top:-999px;left:-999px;opacity:0;';
+  document.body.appendChild(dummy);
+  dummy.focus(); dummy.blur();
+  setTimeout(() => document.body.removeChild(dummy), 200);
   const answerEl = document.getElementById('ai-search-answer');
   const btn = document.getElementById('ai-search-btn');
   btn.disabled = true; btn.textContent = '⏳ 분석 중...';
 
   const turnId = 'ai-turn-' + Date.now();
+  const turnWrapId = 'ai-turn-wrap-' + Date.now();
   answerEl.insertAdjacentHTML('beforeend', `
-    <div style="margin-top:12px">
+    <div id="${turnWrapId}" style="margin-top:12px">
       <div style="font-size:12px;color:var(--text);font-weight:700;margin-bottom:6px">🙋 ${q}</div>
       <div id="${turnId}" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;font-size:13px;color:var(--muted)">관련 자료를 찾고 분석하는 중이에요...</div>
     </div>`);
-  aiSearchScrollToBottom();
+  // 질문 말풍선이 키보드 위로 보이도록 스크롤 (키보드가 안 내려가도 질문은 보임)
+  setTimeout(() => {
+    const wrap = document.getElementById(turnWrapId);
+    if(wrap) wrap.scrollIntoView({ behavior:'smooth', block:'start' });
+  }, 100);
 
   try {
     const { answer, relMsgs, relEvents, relWeekly, relFolders, relDocs } = await aiSearchAsk(q);
