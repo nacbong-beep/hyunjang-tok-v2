@@ -5247,7 +5247,8 @@ function popoutLibraryDoc() {
   doc.write('* { box-sizing:border-box; margin:0; padding:0; }');
   doc.write('body { background:#1a2332; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; overflow:hidden; }');
   doc.write('.header { background:#263448; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }');
-  doc.write('.img-wrap { flex:1; overflow:auto; display:flex; padding:12px; }');
+  doc.write('.img-wrap { flex:1; overflow:auto; display:block; padding:12px; text-align:center; cursor:grab; }');
+  doc.write('.img-wrap.dragging { cursor:grabbing; }');
   doc.write('.zoom-bar { background:#263448; padding:8px 14px; display:flex; gap:8px; align-items:center; justify-content:center; flex-shrink:0; }');
   doc.write('button { border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.1); color:#fff; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }');
   doc.write('button:hover { background:rgba(255,255,255,.3); }');
@@ -5255,34 +5256,66 @@ function popoutLibraryDoc() {
   doc.write('<div class="header">');
   doc.write('<div><div style="color:#fff;font-size:13px;font-weight:700">' + title + '</div>');
   doc.write('<div style="color:rgba(255,255,255,.5);font-size:11px;margin-top:2px">' + meta + '</div></div>');
-  doc.write('<div style="color:rgba(255,255,255,.4);font-size:11px">창 크기를 자유롭게 조절하세요</div></div>');
-  doc.write('<div class="img-wrap"><img id="main-img" src="' + imgSrc + '" style="width:100%;height:auto;border-radius:6px;cursor:zoom-in;margin:auto"></div>');
+  doc.write('<div style="color:rgba(255,255,255,.4);font-size:11px">드래그로 이동 / 버튼으로 확대</div></div>');
+  doc.write('<div class="img-wrap" id="img-wrap"><img id="main-img" src="' + imgSrc + '" style="border-radius:6px;margin:auto;display:block;user-select:none;-webkit-user-drag:none"></div>');
   doc.write('<div class="zoom-bar">');
-  doc.write('<button id="zm">🔍 −</button>');
+  doc.write('<button id="zm">− 축소</button>');
   doc.write('<span id="zl" style="color:rgba(255,255,255,.7);font-size:12px;min-width:44px;text-align:center">100%</span>');
-  doc.write('<button id="zp">🔍 +</button>');
+  doc.write('<button id="zp">+ 확대</button>');
   doc.write('<button id="zr">원본</button>');
   doc.write('<button id="zf">전체 맞춤</button>');
   doc.write('</div>');
   doc.close();
 
-  // 이벤트 연결 - onload 후 실행
   const win = libFloatWin;
   win.onload = function() {
-    let scale = 1;
     const img = win.document.getElementById('main-img');
-    function setZoom(s) {
-      scale = Math.max(0.1, Math.min(10, s));
-      img.style.transform = 'scale(' + scale + ')';
-      img.style.transformOrigin = 'center center';
-      win.document.getElementById('zl').textContent = Math.round(scale * 100) + '%';
+    const wrap = win.document.getElementById('img-wrap');
+    let baseFitWidth = 0, zoomScale = 1;
+
+    function applyZoom() {
+      img.style.width = (baseFitWidth * zoomScale) + 'px';
+      img.style.height = 'auto';
+      win.document.getElementById('zl').textContent = Math.round(zoomScale * 100) + '%';
     }
-    win.document.getElementById('zm').onclick = () => setZoom(scale - 0.2);
-    win.document.getElementById('zp').onclick = () => setZoom(scale + 0.2);
-    win.document.getElementById('zr').onclick = () => setZoom(1);
-    win.document.getElementById('zf').onclick = () => setZoom(1);
+    function setZoom(s) {
+      zoomScale = Math.max(0.2, Math.min(8, s));
+      applyZoom();
+    }
+    function fitZoom() {
+      if(!img.naturalWidth) return;
+      const availW = Math.max(50, wrap.clientWidth - 24);
+      const availH = Math.max(50, wrap.clientHeight - 24);
+      const ratio = img.naturalWidth / img.naturalHeight;
+      let w = availW, h = w / ratio;
+      if(h > availH) { h = availH; w = h * ratio; }
+      baseFitWidth = w; zoomScale = 1;
+      img.style.width = w + 'px'; img.style.height = 'auto';
+      win.document.getElementById('zl').textContent = '100%';
+    }
+    img.onload = fitZoom;
+    if(img.complete && img.naturalWidth) fitZoom();
+
+    win.document.getElementById('zm').onclick = () => setZoom(zoomScale - 0.2);
+    win.document.getElementById('zp').onclick = () => setZoom(zoomScale + 0.2);
+    win.document.getElementById('zr').onclick = () => { if(img.naturalWidth && baseFitWidth) setZoom(img.naturalWidth / baseFitWidth); };
+    win.document.getElementById('zf').onclick = fitZoom;
+
+    // 드래그로 이동
+    let isDragging = false, startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
+    wrap.addEventListener('mousedown', e => {
+      if(e.button !== 0) return;
+      isDragging = true; startX = e.clientX; startY = e.clientY;
+      scrollLeft = wrap.scrollLeft; scrollTop = wrap.scrollTop;
+      wrap.classList.add('dragging');
+    });
+    win.addEventListener('mousemove', e => {
+      if(!isDragging) return;
+      wrap.scrollLeft = scrollLeft - (e.clientX - startX);
+      wrap.scrollTop  = scrollTop  - (e.clientY - startY);
+    });
+    win.addEventListener('mouseup', () => { isDragging = false; wrap.classList.remove('dragging'); });
   };
-  // 이미 로드된 경우 직접 실행
   if(win.document.readyState === 'complete') win.onload();
   libFloatWin.focus();
 }
