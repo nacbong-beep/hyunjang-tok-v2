@@ -298,281 +298,7 @@ body.is-mobile-device .dash-ai-bar{display:none!important}
 </style>
 </head>
 <body>
-<div class="app">
-  <aside class="sidebar">
-    <div class="logo" onclick="setView('dashboard')">
-      <div class="logo-title">현장톡</div>
-      <div class="logo-sub">건설 AI 업무 비서</div>
-      <div id="logo-sub2" style="font-size:11px;color:rgba(255,255,255,.6);margin-top:3px"></div>
-    </div>
-    <nav class="nav" id="sidebar-nav"></nav>
-    <div class="room-tools">
-      <button class="room-tool-btn" onclick="toggleEditMode()">순서 편집</button>
-      <button class="room-tool-btn" onclick="toggleFavoriteOnly()">즐겨찾기만</button>
-    </div>
-    <button class="room-add" onclick="addRoomPrompt()">+ 채팅방 추가</button>
-    <div class="side-stat">
-      <div class="side-stat-row"><span>전체 메시지</span><strong id="stat-total">0건</strong></div>
-      <div class="side-stat-row"><span>미정리 할일</span><strong id="stat-todo">0건</strong></div>
-    </div>
-  </aside>
-
-  <main class="main">
-    <header class="header">
-      <div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <button id="hamburger-btn" onclick="toggleSidebar()" style="display:none;border:none;background:none;font-size:20px;cursor:pointer;padding:4px;color:var(--primary);line-height:1">☰</button>
-          <div class="header-title" id="header-title">대시보드</div>
-          <div id="header-guide" style="font-size:12px;color:var(--muted);border-left:2px solid var(--border2);padding-left:12px;line-height:1.4;display:none;white-space:nowrap">
-            카톡 대화를 붙여넣으면 AI가 자동 분류·브리핑하고, 궁금한 자료는 AI 검색으로 바로 물어볼 수 있어요.
-          </div>
-        </div>
-      </div>
-      <div class="header-actions">
-        <div id="header-sub" style="font-size:11px;color:var(--soft);padding-right:8px;border-right:1px solid var(--border2);">현재 localStorage 저장 모드</div>
-        <button class="btn-sm" onclick="setView('settings')">⚙️ 설정</button>
-        <button class="btn-primary header-btn-wide" style="background:#7c3aed;line-height:1.3;padding:7px 16px;text-align:center" onclick="setView('input')">+ 메시지 입력<br><span style="font-size:11px;opacity:0.85">✨ AI 분류</span></button>
-        <button class="btn-primary header-btn-narrow" style="background:#7c3aed;line-height:1.3;padding:7px 16px;text-align:center" onclick="setView('ai_search')">🤖 AI 검색</button>
-      </div>
-    </header>
-    <section class="content" id="main-content"></section>
-  </main>
-</div>
-
-<!-- 모바일 사이드바 오버레이 -->
-<div id="sidebar-overlay" onclick="closeSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:199"></div>
-
-<div class="modal-overlay" id="room-modal" style="display:none">
-  <div class="modal">
-    <div class="modal-title">채팅방 추가</div>
-    <input class="modal-input" id="room-name-input" placeholder="채팅방 이름 (예: 전체 관리자방)" />
-    <div class="modal-actions">
-      <button class="btn-ghost" style="flex:1" onclick="closeModal()">취소</button>
-      <button class="btn-primary" style="flex:2" onclick="confirmAddRoom()">추가</button>
-    </div>
-  </div>
-</div>
-
-<div class="toast" id="toast"></div>
-
-<!-- 자료 수정 모달 (body 고정) -->
-<div id="lib-edit-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;align-items:center;justify-content:center;backdrop-filter:blur(4px)">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-title">✏️ 자료 수정</div>
-    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">공종 분류</label>
-    <select class="modal-input" id="lib-edit-cat"></select>
-    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">제목</label>
-    <input class="modal-input" id="lib-edit-title" placeholder="자료 제목">
-    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">메모</label>
-    <textarea class="modal-input" id="lib-edit-memo" placeholder="메모 (선택사항)" style="min-height:60px;resize:vertical"></textarea>
-    <div class="modal-actions">
-      <button class="btn-ghost" style="flex:1" onclick="closeLibraryEditModal()">취소</button>
-      <button class="btn-primary" style="flex:2" onclick="saveLibraryEdit()">저장</button>
-    </div>
-  </div>
-</div>
-
-<!-- 건설라이브러리 뷰어 모달 (body 고정) -->
-<div id="lib-view-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2000;flex-direction:column">
-  <div id="lib-view-header" style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(0,0,0,.6);flex-shrink:0">
-    <div>
-      <div id="lib-view-title" style="font-size:15px;font-weight:700;color:#fff"></div>
-      <div id="lib-view-meta" style="font-size:12px;color:rgba(255,255,255,.6);margin-top:2px"></div>
-    </div>
-    <div style="display:flex;gap:8px">
-      <button id="lib-view-delete" style="border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">🗑️ 삭제</button>
-      <button id="lib-view-edit" onclick="openLibraryEditModal()" style="border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">✏️ 수정</button>
-      <button onclick="printLibraryDoc()" style="border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">🖨️ 인쇄</button>
-      <button onclick="popoutLibraryDoc()" style="border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">⧉ 팝업</button>
-      <button onclick="closeLibraryDoc()" style="border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">✕ 닫기</button>
-    </div>
-  </div>
-  <div id="lib-view-zoombar" style="display:flex;align-items:center;justify-content:center;gap:12px;padding:8px;background:rgba(0,0,0,.4);flex-shrink:0">
-    <button onclick="libZoom(-0.2)" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;width:32px;height:32px;font-size:18px;cursor:pointer;font-weight:700">−</button>
-    <span id="lib-zoom-label" style="color:#fff;font-size:13px;min-width:44px;text-align:center">100%</span>
-    <button onclick="libZoom(0.2)" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;width:32px;height:32px;font-size:18px;cursor:pointer;font-weight:700">+</button>
-    <button onclick="libZoomReset()" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;padding:0 10px;height:32px;font-size:12px;cursor:pointer">원본</button>
-    <button onclick="libZoomFit()" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;padding:0 10px;height:32px;font-size:12px;cursor:pointer">전체 맞춤</button>
-  </div>
-  <div style="flex:1;overflow:auto;display:block;padding:20px;text-align:center;cursor:grab" id="lib-view-scroll">
-    <img id="lib-view-img" src="" style="border-radius:8px;transition:width .15s;margin:auto;display:block;user-select:none;-webkit-user-drag:none">
-  </div>
-</div>
-
-<!-- 날짜 필터 모달 -->
-<div class="modal-overlay" id="date-filter-modal" style="display:none">
-  <div class="modal" style="max-width:360px;text-align:center">
-
-    <!-- 1단계: 채팅방 선택 -->
-    <div id="date-filter-step1">
-      <div class="modal-title">💬 1단계 · 채팅방 선택</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">어느 채팅방 대화인가요?</div>
-      <div id="room-select-list" style="display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;margin-bottom:8px"></div>
-      <button class="btn-ghost" onclick="addNewRoomFromShare()" style="width:100%;padding:11px;font-size:13px;border-style:dashed">+ 새 채팅방 추가</button>
-      <button class="btn-ghost" style="width:100%;margin-top:8px" onclick="closeDateFilterModal()">취소</button>
-    </div>
-
-    <!-- 새 채팅방 입력 -->
-    <div id="date-filter-newroom" style="display:none">
-      <div class="modal-title">💬 새 채팅방 추가</div>
-      <input class="modal-input" id="new-room-share-input" placeholder="채팅방 이름 입력" />
-      <div class="modal-actions">
-        <button class="btn-ghost" style="flex:1" onclick="backToStep1Share()">← 이전</button>
-        <button class="btn-primary" style="flex:2" onclick="confirmNewRoomShare()">추가 후 선택</button>
-      </div>
-    </div>
-
-    <!-- 2단계: 날짜 선택 -->
-    <div id="date-filter-step2" style="display:none">
-      <div class="modal-title">📅 2단계 · 기간 선택</div>
-      <div style="font-size:13px;color:var(--muted);margin-bottom:16px">어느 기간 대화를 분류할까요?</div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        <button class="btn-primary" onclick="applyDateFilter(1)" style="padding:13px;font-size:14px">📅 오늘 대화만</button>
-        <button class="btn-primary" onclick="applyDateFilter(3)" style="padding:13px;font-size:14px;background:var(--primary2)">📅 최근 3일</button>
-        <button class="btn-primary" onclick="applyDateFilter(7)" style="padding:13px;font-size:14px;background:var(--primary2)">📅 최근 1주일</button>
-        <div style="border:1px solid var(--border2);border-radius:9px;padding:12px;text-align:left">
-          <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">📅 특정 날짜</div>
-          <input type="date" id="specific-date-input" class="field-control" style="width:100%;margin-bottom:8px">
-          <button class="btn-primary" onclick="applySpecificDate()" style="width:100%;padding:9px;font-size:13px">이 날짜만 보기</button>
-        </div>
-        <div style="border:1px solid var(--border2);border-radius:9px;padding:12px;text-align:left">
-          <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">📅 특정 기간</div>
-          <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
-            <input type="date" id="range-start-input" class="field-control" style="flex:1">
-            <span style="font-size:12px;color:var(--muted)">~</span>
-            <input type="date" id="range-end-input" class="field-control" style="flex:1">
-          </div>
-          <button class="btn-primary" onclick="applyDateRange()" style="width:100%;padding:9px;font-size:13px">이 기간 보기</button>
-        </div>
-        <button class="btn-ghost" onclick="applyDateFilter('all')" style="padding:13px;font-size:14px">전체 가져오기</button>
-      </div>
-      <button class="btn-ghost" style="width:100%;margin-top:8px" onclick="backToStep1Share()">← 이전</button>
-    </div>
-
-  </div>
-</div>
-
-<!-- 할일 상세 모달 -->
-<div class="modal-overlay" id="todo-detail-modal" style="display:none">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-title">📋 할일 상세</div>
-    <div id="todo-detail-content" style="margin-bottom:16px"></div>
-    <div class="modal-actions">
-      <button class="btn-ghost" style="flex:1" onclick="closeTodoDetail()">닫기</button>
-      <button id="todo-detail-done-btn" class="btn-primary" style="flex:2">✅ 완료처리</button>
-    </div>
-  </div>
-</div>
-
-<!-- 날짜별 일정 목록 모달 -->
-<div class="modal-overlay" id="day-modal" style="display:none">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-title" id="day-modal-title">📅 일정</div>
-    <input type="hidden" id="day-modal-date">
-    <div id="day-modal-list" style="max-height:320px;overflow-y:auto;margin-bottom:16px"></div>
-    <div class="modal-actions">
-      <button class="btn-ghost" style="flex:1" onclick="closeDayModal()">닫기</button>
-      <button class="btn-primary" style="flex:2" onclick="addFromDayModal()">+ 일정 추가</button>
-    </div>
-  </div>
-</div>
-
-<!-- 직접 일정 추가/수정 모달 -->
-<div class="modal-overlay" id="event-modal" style="display:none">
-  <div class="modal" style="max-width:400px">
-    <div class="modal-title" id="event-modal-title">📅 일정 추가</div>
-    <input class="modal-input" id="event-title-input" placeholder="일정 제목 (예: 욕실 방수 검측)" />
-    <div style="display:flex;gap:8px;margin-bottom:12px">
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer">
-        <input type="radio" name="event-date-type" value="single" id="event-type-single" checked onchange="toggleEventDateType()" style="cursor:pointer"> 단일 날짜
-      </label>
-      <label style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer">
-        <input type="radio" name="event-date-type" value="range" id="event-type-range" onchange="toggleEventDateType()" style="cursor:pointer"> 기간
-      </label>
-    </div>
-    <div id="event-single-date">
-      <input class="modal-input" id="event-date-input" type="date" />
-    </div>
-    <div id="event-range-date" style="display:none">
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
-        <input class="modal-input" id="event-start-input" type="date" style="flex:1;margin-bottom:0" placeholder="시작일"/>
-        <span style="font-size:13px;color:var(--muted);flex-shrink:0">~</span>
-        <input class="modal-input" id="event-end-input" type="date" style="flex:1;margin-bottom:0" placeholder="종료일"/>
-      </div>
-    </div>
-    <select class="modal-input" id="event-tag-input" style="cursor:pointer">
-      <option value="일정">📅 일정</option>
-      <option value="지시사항">📋 지시사항</option>
-      <option value="공지사항">📢 공지사항</option>
-      <option value="품질관리">🧪 품질관리</option>
-      <option value="안전관리">⚠️ 안전관리</option>
-      <option value="자재발주">🧱 자재발주</option>
-      <option value="하자보수">🔧 하자보수</option>
-      <option value="시공기준">📐 시공기준</option>
-      <option value="기타">📌 기타</option>
-    </select>
-    <div style="margin-bottom:12px">
-      <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">색상 선택</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap" id="event-color-picker">
-        <div onclick="selectEventColor('#ef4444')" id="color-ef4444" style="width:28px;height:28px;border-radius:50%;background:#ef444433;border:2px solid #ef4444;cursor:pointer;flex-shrink:0" title="빨강"></div>
-        <div onclick="selectEventColor('#f97316')" id="color-f97316" style="width:28px;height:28px;border-radius:50%;background:#f9731633;border:2px solid #f97316;cursor:pointer;flex-shrink:0" title="주황"></div>
-        <div onclick="selectEventColor('#f5c518')" id="color-f5c518" style="width:28px;height:28px;border-radius:50%;background:#f5c51833;border:2px solid #f5c518;cursor:pointer;flex-shrink:0" title="개나리"></div>
-        <div onclick="selectEventColor('#10b981')" id="color-10b981" style="width:28px;height:28px;border-radius:50%;background:#10b98133;border:2px solid #10b981;cursor:pointer;flex-shrink:0" title="초록"></div>
-        <div onclick="selectEventColor('#3b82f6')" id="color-3b82f6" style="width:28px;height:28px;border-radius:50%;background:#3b82f633;border:2px solid #3b82f6;cursor:pointer;flex-shrink:0" title="파랑"></div>
-        <div onclick="selectEventColor('#8b5cf6')" id="color-8b5cf6" style="width:28px;height:28px;border-radius:50%;background:#8b5cf633;border:2px solid #8b5cf6;cursor:pointer;flex-shrink:0" title="보라"></div>
-        <div onclick="selectEventColor('#64748b')" id="color-64748b" style="width:28px;height:28px;border-radius:50%;background:#64748b33;border:2px solid #64748b;cursor:pointer;flex-shrink:0" title="회색"></div>
-        <div onclick="selectEventColor('#1a2332')" id="color-1a2332" style="width:28px;height:28px;border-radius:50%;background:#1a233233;border:2px solid #1a2332;cursor:pointer;flex-shrink:0" title="검정"></div>
-      </div>
-      <input type="hidden" id="event-color-input" value="#3b82f6">
-    </div>
-    <textarea class="modal-input" id="event-memo-input" placeholder="메모 (선택사항)" style="min-height:80px;resize:vertical;margin-bottom:12px"></textarea>
-    <div class="modal-actions">
-      <button class="btn-ghost" style="flex:1" onclick="closeEventModal()">취소</button>
-      <button id="event-delete-btn" class="btn-ghost" style="flex:1;color:#dc2626;border-color:#fecaca;display:none" onclick="deleteCustomEvent()">삭제</button>
-      <button class="btn-primary" style="flex:2" onclick="saveCustomEvent()">저장</button>
-    </div>
-  </div>
-</div>
-
-<!-- 메시지 일정 수정 모달 -->
-<style>
-  #msg-event-modal label{margin-bottom:3px!important}
-  #msg-event-modal input.modal-input,
-  #msg-event-modal select.modal-input{padding:7px 12px;margin-bottom:8px;font-size:13px}
-</style>
-<div class="modal-overlay" id="msg-event-modal" style="display:none">
-  <div class="modal" style="max-width:400px">
-    <div class="modal-title">📋 메시지 수정</div>
-    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">제목/요약</label>
-    <input class="modal-input" id="msg-event-summary" placeholder="일정 제목" />
-    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">발신자</label>
-    <input class="modal-input" id="msg-event-sender" placeholder="발신자 이름" />
-    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">대화 날짜 <span style="font-weight:400;color:var(--soft)">(카톡 대화가 오간 날)</span></label>
-    <input class="modal-input" id="msg-event-date" type="date" />
-    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">일정 날짜 <span style="font-weight:400;color:var(--soft)">(메시지 내용에 해당하는 날, 없으면 비움)</span></label>
-    <input class="modal-input" id="msg-event-eventdate" type="date" />
-    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">태그</label>
-    <select class="modal-input" id="msg-event-tag" style="cursor:pointer">
-      <option value="일정">📅 일정</option>
-      <option value="지시사항">📋 지시사항</option>
-      <option value="공지사항">📢 공지사항</option>
-      <option value="품질관리">🧪 품질관리</option>
-      <option value="안전관리">⚠️ 안전관리</option>
-      <option value="자재발주">🧱 자재발주</option>
-      <option value="하자보수">🔧 하자보수</option>
-      <option value="시공기준">📐 시공기준</option>
-      <option value="기타">📌 기타</option>
-    </select>
-    <label style="font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px">내용</label>
-    <textarea class="modal-input" id="msg-event-content" placeholder="내용" style="min-height:160px;resize:vertical;margin-bottom:4px"></textarea>
-    <input class="modal-input" id="msg-event-room" placeholder="채팅방" style="margin-bottom:12px" readonly />
-    <div class="modal-actions">
-      <button class="btn-ghost" style="flex:1" onclick="closeMsgEventModal()">취소</button>
-      <button class="btn-ghost" style="flex:1;color:#dc2626;border-color:#fecaca" onclick="deleteMsgEvent()">삭제</button>
-      <button class="btn-primary" style="flex:2" onclick="saveMsgEvent()">저장</button>
-    </div>
-  </div>
-</div>
+<div id="app"></div>
 
 <!-- 로그인 모달 -->
 <div id="pw-modal" style="display:none;position:fixed;inset:0;background:#1a2332;z-index:9999;display:flex;align-items:center;justify-content:center;">
@@ -685,11 +411,6 @@ const KR_HOLIDAYS = {
 };
 
 // ===== 상태 =====
-// 모바일 기기 판별 (화면폭이 아니라 실제 기기 종류 기준 - 폴드 펼친 화면도 폰이라 카톡 붙여넣기가 어려움)
-if(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
-  document.body.classList.add('is-mobile-device');
-}
-
 let rooms = JSON.parse(localStorage.getItem('hj3_rooms') || JSON.stringify([
   {id:uid(),name:'전체 관리자방',favorite:true,archived:false,sortOrder:1},
   {id:uid(),name:'석공사 협의방',favorite:true,archived:false,sortOrder:2},
@@ -6171,7 +5892,65 @@ function updateLogoSub() {
   el.style.display = appSettings.siteName ? 'block' : 'none';
 }
 
+function renderModals() {
+  const div = document.createElement('div');
+  div.id = 'app-modals';
+  div.innerHTML = "<div class=\"modal-overlay\" id=\"room-modal\" style=\"display:none\">\n  <div class=\"modal\">\n    <div class=\"modal-title\">\ucc44\ud305\ubc29 \ucd94\uac00</div>\n    <input class=\"modal-input\" id=\"room-name-input\" placeholder=\"\ucc44\ud305\ubc29 \uc774\ub984 (\uc608: \uc804\uccb4 \uad00\ub9ac\uc790\ubc29)\" />\n    <div class=\"modal-actions\">\n      <button class=\"btn-ghost\" style=\"flex:1\" onclick=\"closeModal()\">\ucde8\uc18c</button>\n      <button class=\"btn-primary\" style=\"flex:2\" onclick=\"confirmAddRoom()\">\ucd94\uac00</button>\n    </div>\n  </div>\n</div>\n\n<div class=\"toast\" id=\"toast\"></div>\n\n<!-- \uc790\ub8cc \uc218\uc815 \ubaa8\ub2ec (body \uace0\uc815) -->\n<div id=\"lib-edit-modal\" style=\"display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:3000;align-items:center;justify-content:center;backdrop-filter:blur(4px)\">\n  <div class=\"modal\" style=\"max-width:420px\">\n    <div class=\"modal-title\">\u270f\ufe0f \uc790\ub8cc \uc218\uc815</div>\n    <label style=\"font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px\">\uacf5\uc885 \ubd84\ub958</label>\n    <select class=\"modal-input\" id=\"lib-edit-cat\"></select>\n    <label style=\"font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px\">\uc81c\ubaa9</label>\n    <input class=\"modal-input\" id=\"lib-edit-title\" placeholder=\"\uc790\ub8cc \uc81c\ubaa9\">\n    <label style=\"font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px\">\uba54\ubaa8</label>\n    <textarea class=\"modal-input\" id=\"lib-edit-memo\" placeholder=\"\uba54\ubaa8 (\uc120\ud0dd\uc0ac\ud56d)\" style=\"min-height:60px;resize:vertical\"></textarea>\n    <div class=\"modal-actions\">\n      <button class=\"btn-ghost\" style=\"flex:1\" onclick=\"closeLibraryEditModal()\">\ucde8\uc18c</button>\n      <button class=\"btn-primary\" style=\"flex:2\" onclick=\"saveLibraryEdit()\">\uc800\uc7a5</button>\n    </div>\n  </div>\n</div>\n\n<!-- \uac74\uc124\ub77c\uc774\ube0c\ub7ec\ub9ac \ubdf0\uc5b4 \ubaa8\ub2ec (body \uace0\uc815) -->\n<div id=\"lib-view-modal\" style=\"display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2000;flex-direction:column\">\n  <div id=\"lib-view-header\" style=\"display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(0,0,0,.6);flex-shrink:0\">\n    <div>\n      <div id=\"lib-view-title\" style=\"font-size:15px;font-weight:700;color:#fff\"></div>\n      <div id=\"lib-view-meta\" style=\"font-size:12px;color:rgba(255,255,255,.6);margin-top:2px\"></div>\n    </div>\n    <div style=\"display:flex;gap:8px\">\n      <button id=\"lib-view-delete\" style=\"border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer\">\ud83d\uddd1\ufe0f \uc0ad\uc81c</button>\n      <button id=\"lib-view-edit\" onclick=\"openLibraryEditModal()\" style=\"border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer\">\u270f\ufe0f \uc218\uc815</button>\n      <button onclick=\"printLibraryDoc()\" style=\"border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer\">\ud83d\udda8\ufe0f \uc778\uc1c4</button>\n      <button onclick=\"popoutLibraryDoc()\" style=\"border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer\">\u29c9 \ud31d\uc5c5</button>\n      <button onclick=\"closeLibraryDoc()\" style=\"border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer\">\u2715 \ub2eb\uae30</button>\n    </div>\n  </div>\n  <div id=\"lib-view-zoombar\" style=\"display:flex;align-items:center;justify-content:center;gap:12px;padding:8px;background:rgba(0,0,0,.4);flex-shrink:0\">\n    <button onclick=\"libZoom(-0.2)\" style=\"border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;width:32px;height:32px;font-size:18px;cursor:pointer;font-weight:700\">\u2212</button>\n    <span id=\"lib-zoom-label\" style=\"color:#fff;font-size:13px;min-width:44px;text-align:center\">100%</span>\n    <button onclick=\"libZoom(0.2)\" style=\"border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;width:32px;height:32px;font-size:18px;cursor:pointer;font-weight:700\">+</button>\n    <button onclick=\"libZoomReset()\" style=\"border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;padding:0 10px;height:32px;font-size:12px;cursor:pointer\">\uc6d0\ubcf8</button>\n    <button onclick=\"libZoomFit()\" style=\"border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;padding:0 10px;height:32px;font-size:12px;cursor:pointer\">\uc804\uccb4 \ub9de\ucda4</button>\n  </div>\n  <div style=\"flex:1;overflow:auto;display:block;padding:20px;text-align:center;cursor:grab\" id=\"lib-view-scroll\">\n    <img id=\"lib-view-img\" src=\"\" style=\"border-radius:8px;transition:width .15s;margin:auto;display:block;user-select:none;-webkit-user-drag:none\">\n  </div>\n</div>\n\n<!-- \ub0a0\uc9dc \ud544\ud130 \ubaa8\ub2ec -->\n<div class=\"modal-overlay\" id=\"date-filter-modal\" style=\"display:none\">\n  <div class=\"modal\" style=\"max-width:360px;text-align:center\">\n\n    <!-- 1\ub2e8\uacc4: \ucc44\ud305\ubc29 \uc120\ud0dd -->\n    <div id=\"date-filter-step1\">\n      <div class=\"modal-title\">\ud83d\udcac 1\ub2e8\uacc4 \u00b7 \ucc44\ud305\ubc29 \uc120\ud0dd</div>\n      <div style=\"font-size:13px;color:var(--muted);margin-bottom:16px\">\uc5b4\ub290 \ucc44\ud305\ubc29 \ub300\ud654\uc778\uac00\uc694?</div>\n      <div id=\"room-select-list\" style=\"display:flex;flex-direction:column;gap:8px;max-height:280px;overflow-y:auto;margin-bottom:8px\"></div>\n      <button class=\"btn-ghost\" onclick=\"addNewRoomFromShare()\" style=\"width:100%;padding:11px;font-size:13px;border-style:dashed\">+ \uc0c8 \ucc44\ud305\ubc29 \ucd94\uac00</button>\n      <button class=\"btn-ghost\" style=\"width:100%;margin-top:8px\" onclick=\"closeDateFilterModal()\">\ucde8\uc18c</button>\n    </div>\n\n    <!-- \uc0c8 \ucc44\ud305\ubc29 \uc785\ub825 -->\n    <div id=\"date-filter-newroom\" style=\"display:none\">\n      <div class=\"modal-title\">\ud83d\udcac \uc0c8 \ucc44\ud305\ubc29 \ucd94\uac00</div>\n      <input class=\"modal-input\" id=\"new-room-share-input\" placeholder=\"\ucc44\ud305\ubc29 \uc774\ub984 \uc785\ub825\" />\n      <div class=\"modal-actions\">\n        <button class=\"btn-ghost\" style=\"flex:1\" onclick=\"backToStep1Share()\">\u2190 \uc774\uc804</button>\n        <button class=\"btn-primary\" style=\"flex:2\" onclick=\"confirmNewRoomShare()\">\ucd94\uac00 \ud6c4 \uc120\ud0dd</button>\n      </div>\n    </div>\n\n    <!-- 2\ub2e8\uacc4: \ub0a0\uc9dc \uc120\ud0dd -->\n    <div id=\"date-filter-step2\" style=\"display:none\">\n      <div class=\"modal-title\">\ud83d\udcc5 2\ub2e8\uacc4 \u00b7 \uae30\uac04 \uc120\ud0dd</div>\n      <div style=\"font-size:13px;color:var(--muted);margin-bottom:16px\">\uc5b4\ub290 \uae30\uac04 \ub300\ud654\ub97c \ubd84\ub958\ud560\uae4c\uc694?</div>\n      <div style=\"display:flex;flex-direction:column;gap:8px\">\n        <button class=\"btn-primary\" onclick=\"applyDateFilter(1)\" style=\"padding:13px;font-size:14px\">\ud83d\udcc5 \uc624\ub298 \ub300\ud654\ub9cc</button>\n        <button class=\"btn-primary\" onclick=\"applyDateFilter(3)\" style=\"padding:13px;font-size:14px;background:var(--primary2)\">\ud83d\udcc5 \ucd5c\uadfc 3\uc77c</button>\n        <button class=\"btn-primary\" onclick=\"applyDateFilter(7)\" style=\"padding:13px;font-size:14px;background:var(--primary2)\">\ud83d\udcc5 \ucd5c\uadfc 1\uc8fc\uc77c</button>\n        <div style=\"border:1px solid var(--border2);border-radius:9px;padding:12px;text-align:left\">\n          <div style=\"font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px\">\ud83d\udcc5 \ud2b9\uc815 \ub0a0\uc9dc</div>\n          <input type=\"date\" id=\"specific-date-input\" class=\"field-control\" style=\"width:100%;margin-bottom:8px\">\n          <button class=\"btn-primary\" onclick=\"applySpecificDate()\" style=\"width:100%;padding:9px;font-size:13px\">\uc774 \ub0a0\uc9dc\ub9cc \ubcf4\uae30</button>\n        </div>\n        <div style=\"border:1px solid var(--border2);border-radius:9px;padding:12px;text-align:left\">\n          <div style=\"font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px\">\ud83d\udcc5 \ud2b9\uc815 \uae30\uac04</div>\n          <div style=\"display:flex;gap:6px;align-items:center;margin-bottom:8px\">\n            <input type=\"date\" id=\"range-start-input\" class=\"field-control\" style=\"flex:1\">\n            <span style=\"font-size:12px;color:var(--muted)\">~</span>\n            <input type=\"date\" id=\"range-end-input\" class=\"field-control\" style=\"flex:1\">\n          </div>\n          <button class=\"btn-primary\" onclick=\"applyDateRange()\" style=\"width:100%;padding:9px;font-size:13px\">\uc774 \uae30\uac04 \ubcf4\uae30</button>\n        </div>\n        <button class=\"btn-ghost\" onclick=\"applyDateFilter('all')\" style=\"padding:13px;font-size:14px\">\uc804\uccb4 \uac00\uc838\uc624\uae30</button>\n      </div>\n      <button class=\"btn-ghost\" style=\"width:100%;margin-top:8px\" onclick=\"backToStep1Share()\">\u2190 \uc774\uc804</button>\n    </div>\n\n  </div>\n</div>\n\n<!-- \ud560\uc77c \uc0c1\uc138 \ubaa8\ub2ec -->\n<div class=\"modal-overlay\" id=\"todo-detail-modal\" style=\"display:none\">\n  <div class=\"modal\" style=\"max-width:420px\">\n    <div class=\"modal-title\">\ud83d\udccb \ud560\uc77c \uc0c1\uc138</div>\n    <div id=\"todo-detail-content\" style=\"margin-bottom:16px\"></div>\n    <div class=\"modal-actions\">\n      <button class=\"btn-ghost\" style=\"flex:1\" onclick=\"closeTodoDetail()\">\ub2eb\uae30</button>\n      <button id=\"todo-detail-done-btn\" class=\"btn-primary\" style=\"flex:2\">\u2705 \uc644\ub8cc\ucc98\ub9ac</button>\n    </div>\n  </div>\n</div>\n\n<!-- \ub0a0\uc9dc\ubcc4 \uc77c\uc815 \ubaa9\ub85d \ubaa8\ub2ec -->\n<div class=\"modal-overlay\" id=\"day-modal\" style=\"display:none\">\n  <div class=\"modal\" style=\"max-width:420px\">\n    <div class=\"modal-title\" id=\"day-modal-title\">\ud83d\udcc5 \uc77c\uc815</div>\n    <input type=\"hidden\" id=\"day-modal-date\">\n    <div id=\"day-modal-list\" style=\"max-height:320px;overflow-y:auto;margin-bottom:16px\"></div>\n    <div class=\"modal-actions\">\n      <button class=\"btn-ghost\" style=\"flex:1\" onclick=\"closeDayModal()\">\ub2eb\uae30</button>\n      <button class=\"btn-primary\" style=\"flex:2\" onclick=\"addFromDayModal()\">+ \uc77c\uc815 \ucd94\uac00</button>\n    </div>\n  </div>\n</div>\n\n<!-- \uc9c1\uc811 \uc77c\uc815 \ucd94\uac00/\uc218\uc815 \ubaa8\ub2ec -->\n<div class=\"modal-overlay\" id=\"event-modal\" style=\"display:none\">\n  <div class=\"modal\" style=\"max-width:400px\">\n    <div class=\"modal-title\" id=\"event-modal-title\">\ud83d\udcc5 \uc77c\uc815 \ucd94\uac00</div>\n    <input class=\"modal-input\" id=\"event-title-input\" placeholder=\"\uc77c\uc815 \uc81c\ubaa9 (\uc608: \uc695\uc2e4 \ubc29\uc218 \uac80\uce21)\" />\n    <div style=\"display:flex;gap:8px;margin-bottom:12px\">\n      <label style=\"display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer\">\n        <input type=\"radio\" name=\"event-date-type\" value=\"single\" id=\"event-type-single\" checked onchange=\"toggleEventDateType()\" style=\"cursor:pointer\"> \ub2e8\uc77c \ub0a0\uc9dc\n      </label>\n      <label style=\"display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer\">\n        <input type=\"radio\" name=\"event-date-type\" value=\"range\" id=\"event-type-range\" onchange=\"toggleEventDateType()\" style=\"cursor:pointer\"> \uae30\uac04\n      </label>\n    </div>\n    <div id=\"event-single-date\">\n      <input class=\"modal-input\" id=\"event-date-input\" type=\"date\" />\n    </div>\n    <div id=\"event-range-date\" style=\"display:none\">\n      <div style=\"display:flex;gap:8px;align-items:center;margin-bottom:12px\">\n        <input class=\"modal-input\" id=\"event-start-input\" type=\"date\" style=\"flex:1;margin-bottom:0\" placeholder=\"\uc2dc\uc791\uc77c\"/>\n        <span style=\"font-size:13px;color:var(--muted);flex-shrink:0\">~</span>\n        <input class=\"modal-input\" id=\"event-end-input\" type=\"date\" style=\"flex:1;margin-bottom:0\" placeholder=\"\uc885\ub8cc\uc77c\"/>\n      </div>\n    </div>\n    <select class=\"modal-input\" id=\"event-tag-input\" style=\"cursor:pointer\">\n      <option value=\"\uc77c\uc815\">\ud83d\udcc5 \uc77c\uc815</option>\n      <option value=\"\uc9c0\uc2dc\uc0ac\ud56d\">\ud83d\udccb \uc9c0\uc2dc\uc0ac\ud56d</option>\n      <option value=\"\uacf5\uc9c0\uc0ac\ud56d\">\ud83d\udce2 \uacf5\uc9c0\uc0ac\ud56d</option>\n      <option value=\"\ud488\uc9c8\uad00\ub9ac\">\ud83e\uddea \ud488\uc9c8\uad00\ub9ac</option>\n      <option value=\"\uc548\uc804\uad00\ub9ac\">\u26a0\ufe0f \uc548\uc804\uad00\ub9ac</option>\n      <option value=\"\uc790\uc7ac\ubc1c\uc8fc\">\ud83e\uddf1 \uc790\uc7ac\ubc1c\uc8fc</option>\n      <option value=\"\ud558\uc790\ubcf4\uc218\">\ud83d\udd27 \ud558\uc790\ubcf4\uc218</option>\n      <option value=\"\uc2dc\uacf5\uae30\uc900\">\ud83d\udcd0 \uc2dc\uacf5\uae30\uc900</option>\n      <option value=\"\uae30\ud0c0\">\ud83d\udccc \uae30\ud0c0</option>\n    </select>\n    <div style=\"margin-bottom:12px\">\n      <div style=\"font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px\">\uc0c9\uc0c1 \uc120\ud0dd</div>\n      <div style=\"display:flex;gap:8px;flex-wrap:wrap\" id=\"event-color-picker\">\n        <div onclick=\"selectEventColor('#ef4444')\" id=\"color-ef4444\" style=\"width:28px;height:28px;border-radius:50%;background:#ef444433;border:2px solid #ef4444;cursor:pointer;flex-shrink:0\" title=\"\ube68\uac15\"></div>\n        <div onclick=\"selectEventColor('#f97316')\" id=\"color-f97316\" style=\"width:28px;height:28px;border-radius:50%;background:#f9731633;border:2px solid #f97316;cursor:pointer;flex-shrink:0\" title=\"\uc8fc\ud669\"></div>\n        <div onclick=\"selectEventColor('#f5c518')\" id=\"color-f5c518\" style=\"width:28px;height:28px;border-radius:50%;background:#f5c51833;border:2px solid #f5c518;cursor:pointer;flex-shrink:0\" title=\"\uac1c\ub098\ub9ac\"></div>\n        <div onclick=\"selectEventColor('#10b981')\" id=\"color-10b981\" style=\"width:28px;height:28px;border-radius:50%;background:#10b98133;border:2px solid #10b981;cursor:pointer;flex-shrink:0\" title=\"\ucd08\ub85d\"></div>\n        <div onclick=\"selectEventColor('#3b82f6')\" id=\"color-3b82f6\" style=\"width:28px;height:28px;border-radius:50%;background:#3b82f633;border:2px solid #3b82f6;cursor:pointer;flex-shrink:0\" title=\"\ud30c\ub791\"></div>\n        <div onclick=\"selectEventColor('#8b5cf6')\" id=\"color-8b5cf6\" style=\"width:28px;height:28px;border-radius:50%;background:#8b5cf633;border:2px solid #8b5cf6;cursor:pointer;flex-shrink:0\" title=\"\ubcf4\ub77c\"></div>\n        <div onclick=\"selectEventColor('#64748b')\" id=\"color-64748b\" style=\"width:28px;height:28px;border-radius:50%;background:#64748b33;border:2px solid #64748b;cursor:pointer;flex-shrink:0\" title=\"\ud68c\uc0c9\"></div>\n        <div onclick=\"selectEventColor('#1a2332')\" id=\"color-1a2332\" style=\"width:28px;height:28px;border-radius:50%;background:#1a233233;border:2px solid #1a2332;cursor:pointer;flex-shrink:0\" title=\"\uac80\uc815\"></div>\n      </div>\n      <input type=\"hidden\" id=\"event-color-input\" value=\"#3b82f6\">\n    </div>\n    <textarea class=\"modal-input\" id=\"event-memo-input\" placeholder=\"\uba54\ubaa8 (\uc120\ud0dd\uc0ac\ud56d)\" style=\"min-height:80px;resize:vertical;margin-bottom:12px\"></textarea>\n    <div class=\"modal-actions\">\n      <button class=\"btn-ghost\" style=\"flex:1\" onclick=\"closeEventModal()\">\ucde8\uc18c</button>\n      <button id=\"event-delete-btn\" class=\"btn-ghost\" style=\"flex:1;color:#dc2626;border-color:#fecaca;display:none\" onclick=\"deleteCustomEvent()\">\uc0ad\uc81c</button>\n      <button class=\"btn-primary\" style=\"flex:2\" onclick=\"saveCustomEvent()\">\uc800\uc7a5</button>\n    </div>\n  </div>\n</div>\n\n<!-- \uba54\uc2dc\uc9c0 \uc77c\uc815 \uc218\uc815 \ubaa8\ub2ec -->\n<style>\n  #msg-event-modal label{margin-bottom:3px!important}\n  #msg-event-modal input.modal-input,\n  #msg-event-modal select.modal-input{padding:7px 12px;margin-bottom:8px;font-size:13px}\n</style>\n<div class=\"modal-overlay\" id=\"msg-event-modal\" style=\"display:none\">\n  <div class=\"modal\" style=\"max-width:400px\">\n    <div class=\"modal-title\">\ud83d\udccb \uba54\uc2dc\uc9c0 \uc218\uc815</div>\n    <label style=\"font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px\">\uc81c\ubaa9/\uc694\uc57d</label>\n    <input class=\"modal-input\" id=\"msg-event-summary\" placeholder=\"\uc77c\uc815 \uc81c\ubaa9\" />\n    <label style=\"font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px\">\ubc1c\uc2e0\uc790</label>\n    <input class=\"modal-input\" id=\"msg-event-sender\" placeholder=\"\ubc1c\uc2e0\uc790 \uc774\ub984\" />\n    <label style=\"font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px\">\ub300\ud654 \ub0a0\uc9dc <span style=\"font-weight:400;color:var(--soft)\">(\uce74\ud1a1 \ub300\ud654\uac00 \uc624\uac04 \ub0a0)</span></label>\n    <input class=\"modal-input\" id=\"msg-event-date\" type=\"date\" />\n    <label style=\"font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px\">\uc77c\uc815 \ub0a0\uc9dc <span style=\"font-weight:400;color:var(--soft)\">(\uba54\uc2dc\uc9c0 \ub0b4\uc6a9\uc5d0 \ud574\ub2f9\ud558\ub294 \ub0a0, \uc5c6\uc73c\uba74 \ube44\uc6c0)</span></label>\n    <input class=\"modal-input\" id=\"msg-event-eventdate\" type=\"date\" />\n    <label style=\"font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px\">\ud0dc\uadf8</label>\n    <select class=\"modal-input\" id=\"msg-event-tag\" style=\"cursor:pointer\">\n      <option value=\"\uc77c\uc815\">\ud83d\udcc5 \uc77c\uc815</option>\n      <option value=\"\uc9c0\uc2dc\uc0ac\ud56d\">\ud83d\udccb \uc9c0\uc2dc\uc0ac\ud56d</option>\n      <option value=\"\uacf5\uc9c0\uc0ac\ud56d\">\ud83d\udce2 \uacf5\uc9c0\uc0ac\ud56d</option>\n      <option value=\"\ud488\uc9c8\uad00\ub9ac\">\ud83e\uddea \ud488\uc9c8\uad00\ub9ac</option>\n      <option value=\"\uc548\uc804\uad00\ub9ac\">\u26a0\ufe0f \uc548\uc804\uad00\ub9ac</option>\n      <option value=\"\uc790\uc7ac\ubc1c\uc8fc\">\ud83e\uddf1 \uc790\uc7ac\ubc1c\uc8fc</option>\n      <option value=\"\ud558\uc790\ubcf4\uc218\">\ud83d\udd27 \ud558\uc790\ubcf4\uc218</option>\n      <option value=\"\uc2dc\uacf5\uae30\uc900\">\ud83d\udcd0 \uc2dc\uacf5\uae30\uc900</option>\n      <option value=\"\uae30\ud0c0\">\ud83d\udccc \uae30\ud0c0</option>\n    </select>\n    <label style=\"font-size:12px;font-weight:700;color:var(--muted);display:block;margin-bottom:6px\">\ub0b4\uc6a9</label>\n    <textarea class=\"modal-input\" id=\"msg-event-content\" placeholder=\"\ub0b4\uc6a9\" style=\"min-height:160px;resize:vertical;margin-bottom:4px\"></textarea>\n    <input class=\"modal-input\" id=\"msg-event-room\" placeholder=\"\ucc44\ud305\ubc29\" style=\"margin-bottom:12px\" readonly />\n    <div class=\"modal-actions\">\n      <button class=\"btn-ghost\" style=\"flex:1\" onclick=\"closeMsgEventModal()\">\ucde8\uc18c</button>\n      <button class=\"btn-ghost\" style=\"flex:1;color:#dc2626;border-color:#fecaca\" onclick=\"deleteMsgEvent()\">\uc0ad\uc81c</button>\n      <button class=\"btn-primary\" style=\"flex:2\" onclick=\"saveMsgEvent()\">\uc800\uc7a5</button>\n    </div>\n  </div>\n</div>\n";
+  document.body.appendChild(div);
+}
+
+function renderApp() {
+  document.getElementById('app').innerHTML = `
+    <div class="app">
+      <aside class="sidebar">
+        <div class="logo" onclick="setView('dashboard')">
+          <div class="logo-title">현장톡</div>
+          <div class="logo-sub">건설 AI 업무 비서</div>
+          <div id="logo-sub2" style="font-size:11px;color:rgba(255,255,255,.6);margin-top:3px"></div>
+        </div>
+        <nav class="nav" id="sidebar-nav"></nav>
+        <div class="room-tools">
+          <button class="room-tool-btn" onclick="toggleEditMode()">순서 편집</button>
+          <button class="room-tool-btn" onclick="toggleFavoriteOnly()">즐겨찾기만</button>
+        </div>
+        <button class="room-add" onclick="addRoomPrompt()">+ 채팅방 추가</button>
+        <div class="side-stat">
+          <div class="side-stat-row"><span>전체 메시지</span><strong id="stat-total">0건</strong></div>
+          <div class="side-stat-row"><span>미정리 할일</span><strong id="stat-todo">0건</strong></div>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="header">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;">
+              <button id="hamburger-btn" onclick="toggleSidebar()" style="display:none;border:none;background:none;font-size:20px;cursor:pointer;padding:4px;color:var(--primary);line-height:1">☰</button>
+              <div class="header-title" id="header-title">대시보드</div>
+              <div id="header-guide" style="font-size:12px;color:var(--muted);border-left:2px solid var(--border2);padding-left:12px;line-height:1.4;display:none;white-space:nowrap">
+                카톡 대화를 붙여넣으면 AI가 자동 분류·브리핑하고, 궁금한 자료는 AI 검색으로 바로 물어볼 수 있어요.
+              </div>
+            </div>
+          </div>
+          <div class="header-actions">
+            <div id="header-sub" style="font-size:11px;color:var(--soft);padding-right:8px;border-right:1px solid var(--border2);">현재 localStorage 저장 모드</div>
+            <button class="btn-sm" onclick="setView('settings')">⚙️ 설정</button>
+            <button class="btn-primary header-btn-wide" style="background:#7c3aed;line-height:1.3;padding:7px 16px;text-align:center" onclick="setView('input')">+ 메시지 입력<br><span style="font-size:11px;opacity:0.85">✨ AI 분류</span></button>
+            <button class="btn-primary header-btn-narrow" style="background:#7c3aed;line-height:1.3;padding:7px 16px;text-align:center" onclick="setView('ai_search')">🤖 AI 검색</button>
+          </div>
+        </header>
+        <section class="content" id="main-content"></section>
+      </main>
+    </div>
+    <div id="sidebar-overlay" onclick="closeSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:199"></div>
+  `;
+  // 모바일 기기 판별
+  if(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
+    document.body.classList.add('is-mobile-device');
+  }
+}
+
 function initApp() {
+  renderApp(); // 인증 성공 후 앱 UI 렌더링 (인증 전엔 DOM에 앱 HTML 없음)
+  renderModals(); // 모달도 인증 후에만 DOM에 추가
   loadFromSupabase().then(ok => {
     if (ok) {
       document.getElementById('header-sub').textContent = '☁️ Supabase 클라우드 저장 모드';
@@ -6183,7 +5962,7 @@ function initApp() {
     renderSidebar();
     setView('dashboard');
     handleSharedText();
-    loadLibDocIndex(); // 도면 AI 인덱스 미리 로드 (AI 검색 정확도 향상)
+    loadLibDocIndex();
   });
 }
 
