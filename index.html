@@ -394,8 +394,8 @@ body.is-mobile-device .dash-ai-bar{display:none!important}
     <button onclick="libZoomReset()" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;padding:0 10px;height:32px;font-size:12px;cursor:pointer">원본</button>
     <button onclick="libZoomFit()" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;padding:0 10px;height:32px;font-size:12px;cursor:pointer">전체 맞춤</button>
   </div>
-  <div style="flex:1;overflow:auto;display:block;padding:20px;text-align:center" id="lib-view-scroll">
-    <img id="lib-view-img" src="" style="border-radius:8px;transition:width .15s;margin:auto;display:block">
+  <div style="flex:1;overflow:auto;display:block;padding:20px;text-align:center;cursor:grab" id="lib-view-scroll">
+    <img id="lib-view-img" src="" style="border-radius:8px;transition:width .15s;margin:auto;display:block;user-select:none;-webkit-user-drag:none">
   </div>
 </div>
 
@@ -5055,6 +5055,39 @@ function openInspectionDocView(docId) {
   }
 }
 
+function initLibViewerDrag() {
+  const el = document.getElementById('lib-view-scroll');
+  if(!el) return;
+  let isDragging = false, startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
+
+  const onDown = (x, y) => {
+    isDragging = true;
+    startX = x; startY = y;
+    scrollLeft = el.scrollLeft; scrollTop = el.scrollTop;
+    el.style.cursor = 'grabbing';
+    el.style.userSelect = 'none';
+  };
+  const onMove = (x, y) => {
+    if(!isDragging) return;
+    el.scrollLeft = scrollLeft - (x - startX);
+    el.scrollTop  = scrollTop  - (y - startY);
+  };
+  const onUp = () => {
+    isDragging = false;
+    el.style.cursor = 'grab';
+    el.style.userSelect = '';
+  };
+
+  el.addEventListener('mousedown',  e => { if(e.button===0) onDown(e.clientX, e.clientY); });
+  window.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
+  window.addEventListener('mouseup',   onUp);
+
+  // 터치 지원 (모바일)
+  el.addEventListener('touchstart', e => { const t=e.touches[0]; onDown(t.clientX, t.clientY); }, {passive:true});
+  el.addEventListener('touchmove',  e => { const t=e.touches[0]; onMove(t.clientX, t.clientY); }, {passive:true});
+  el.addEventListener('touchend',   onUp);
+}
+
 async function openLibraryDoc(id) {
   const doc = libraryDocs.find(d => d.id === id);
   if(!doc) return;
@@ -5071,6 +5104,7 @@ async function openLibraryDoc(id) {
   libBaseFitWidth = 0;
   libZoomScale = 1;
   document.getElementById('lib-view-delete').onclick = () => deleteLibraryDoc(doc.id, doc.file_path);
+  initLibViewerDrag();
   const url = await getLibraryFileUrl(doc.file_path);
   if(url) {
     img.onload = () => { libZoomFit(); };
