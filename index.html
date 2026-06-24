@@ -5113,43 +5113,54 @@ async function openLibraryDoc(id) {
 }
 
 function printLibraryDoc() {
-  const imgSrc = document.getElementById('lib-view-img').src;
-  const title = document.getElementById('lib-view-title').textContent;
-  const meta = document.getElementById('lib-view-meta').textContent;
-  if(!imgSrc) { showToast('이미지를 불러오는 중이에요. 잠시 후 다시 시도해주세요.'); return; }
+  const img = document.getElementById('lib-view-img');
+  if(!img || !img.src || !img.complete) {
+    showToast('이미지를 불러오는 중이에요. 잠시 후 다시 시도해주세요.');
+    return;
+  }
+  // 도면 비율에 따라 용지 방향 자동 결정
+  const isLandscape = img.naturalWidth > img.naturalHeight;
 
-  const printWin = window.open('', '_blank', 'width=1000,height=800');
-  const doc = printWin.document;
-  doc.open();
-  doc.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><title>' + title + '</title>');
-  doc.write('<style>');
-  doc.write('* { margin:0; padding:0; box-sizing:border-box; }');
-  // 화면 미리보기
-  doc.write('@media screen {');
-  doc.write('  body { font-family:sans-serif; background:#f0f0f0; }');
-  doc.write('  .toolbar { background:#fff; padding:10px 16px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid #ddd; position:sticky; top:0; z-index:10; }');
-  doc.write('  .toolbar h1 { font-size:13px; font-weight:700; color:#1a2332; }');
-  doc.write('  .toolbar p { font-size:11px; color:#64748b; margin-top:2px; }');
-  doc.write('  .img-wrap { padding:20px; display:flex; justify-content:center; }');
-  doc.write('  img { max-width:100%; height:auto; box-shadow:0 2px 12px rgba(0,0,0,.15); background:#fff; }');
-  doc.write('}');
-  // 인쇄
-  doc.write('@media print {');
-  doc.write('  .toolbar { display:none !important; }');
-  doc.write('  @page { margin:5mm; size:auto; }');
-  doc.write('  body { margin:0; padding:0; }');
-  doc.write('  .img-wrap { padding:0; display:block; }');
-  doc.write('  img { width:100%; height:auto; display:block; }');
-  doc.write('  body { -webkit-print-color-adjust:exact; print-color-adjust:exact; }');
-  doc.write('}');
-  doc.write('</style></head><body>');
-  doc.write('<div class="toolbar">');
-  doc.write('<div><h1>' + title + '</h1><p>' + meta + '</p></div>');
-  doc.write('<button onclick="window.print()" style="border:none;background:#1a2332;color:#fff;border-radius:6px;padding:8px 18px;font-size:13px;cursor:pointer;font-weight:700">🖨️ 인쇄</button>');
-  doc.write('</div>');
-  doc.write('<div class="img-wrap"><img src="' + imgSrc + '"></div>');
-  doc.write('</body></html>');
-  doc.close();
+  // 인쇄용 스타일 동적 추가
+  const style = document.createElement('style');
+  style.id = 'lib-print-style';
+  style.textContent = `
+    @media print {
+      @page { margin:5mm; size:${isLandscape ? 'landscape' : 'portrait'}; }
+      body > *:not(#lib-view-modal) { display:none !important; }
+      #lib-view-modal {
+        display:flex !important;
+        position:fixed !important;
+        inset:0 !important;
+        background:#fff !important;
+        z-index:99999 !important;
+        flex-direction:column !important;
+      }
+      #lib-view-header { display:none !important; }
+      #lib-view-scroll {
+        flex:1 !important;
+        display:flex !important;
+        align-items:center !important;
+        justify-content:center !important;
+        padding:0 !important;
+      }
+      #lib-view-img {
+        width:100% !important;
+        height:auto !important;
+        max-height:100% !important;
+        object-fit:contain !important;
+      }
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  `;
+  document.head.appendChild(style);
+  window.print();
+  // 인쇄 후 스타일 제거
+  setTimeout(() => {
+    const s = document.getElementById('lib-print-style');
+    if(s) s.remove();
+  }, 1000);
 }
 
 function closeLibraryDoc() {
