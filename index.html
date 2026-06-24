@@ -2056,7 +2056,7 @@ ${relFolders.map(f => `- ${f.title}`).join('\n') || '(관련 검측요청서 폴
 [첨부 도면/문서 - 이미지를 직접 읽어서 치수·마감재 등 정보를 답변에 활용하세요]
 ${relDocs.map(d => {
   const idx = libDocIndexCache[d.id];
-  return `- ${d.title} (${d.category||''})${idx ? '\n  [인덱스] ' + idx.replace(/\n/g,' | ').slice(0,300) : ''}`;
+  return `- ${d.title} (${d.category||''})${idx ? '\n  [인덱스] ' + idx.replace(/\n/g,' | ').slice(0,600) : ''}`;
 }).join('\n') || '(관련 도면 없음)'}`;
   const prompt = isFirstTurn
     ? `당신은 건설현장 정보 비서입니다. 아래 텍스트 자료와 첨부된 도면 이미지를 참고해서 질문에 답하세요.
@@ -2074,12 +2074,17 @@ ${textContext}
 질문: ${question}`;
 
   const parts = [{ text: prompt }];
-  for(const doc of relDocs) {
-    if(!doc.file_url) continue;
-    try {
-      const base64 = await aiSearchUrlToBase64(doc.file_url, doc.file_path || doc.id);
-      parts.push({ inlineData: { mimeType: aiSearchGuessMime(doc.file_name || doc.file_path), data: base64 } });
-    } catch(e) { console.warn('이미지 변환 실패', doc.title, e); }
+  // 이미지는 첫 번째 질문에서만, 그리고 인덱스 텍스트가 없는 도면만 첨부
+  // (인덱스가 있으면 이미 분석된 텍스트로 충분 → egress 절약)
+  if(isFirstTurn) {
+    for(const doc of relDocs) {
+      if(!doc.file_url) continue;
+      if(libDocIndexCache[doc.id]) continue; // 인덱스 있으면 이미지 생략
+      try {
+        const base64 = await aiSearchUrlToBase64(doc.file_url, doc.file_path || doc.id);
+        parts.push({ inlineData: { mimeType: aiSearchGuessMime(doc.file_name || doc.file_path), data: base64 } });
+      } catch(e) { console.warn('이미지 변환 실패', doc.title, e); }
+    }
   }
 
   aiSearchConversation.push({ role: 'user', parts });
@@ -2088,7 +2093,7 @@ ${textContext}
   const timeoutId = setTimeout(() => controller.abort(), 45000); // 45초 넘으면 자동 중단
   let res;
   try {
-    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: aiSearchConversation, generationConfig: { temperature: 0.2, maxOutputTokens: 2048 } }),
@@ -2844,7 +2849,7 @@ async function aiClassifyGemini(text, roomName) {
 대화:
 ${text}`;
 
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -5378,7 +5383,7 @@ async function analyzeDocWithGemini(doc) {
 - 공종/공사 종류 (예: ALC, 발코니, 필로티 등)
 - 기타 중요 정보`;
 
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
