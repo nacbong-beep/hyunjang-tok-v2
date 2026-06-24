@@ -2093,7 +2093,7 @@ ${textContext}
   const timeoutId = setTimeout(() => controller.abort(), 45000); // 45초 넘으면 자동 중단
   let res;
   try {
-    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
+    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: aiSearchConversation, generationConfig: { temperature: 0.2, maxOutputTokens: 2048 } }),
@@ -2849,7 +2849,7 @@ async function aiClassifyGemini(text, roomName) {
 대화:
 ${text}`;
 
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -5383,7 +5383,7 @@ async function analyzeDocWithGemini(doc) {
 - 공종/공사 종류 (예: ALC, 발코니, 필로티 등)
 - 기타 중요 정보`;
 
-  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiApiKey}`, {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
