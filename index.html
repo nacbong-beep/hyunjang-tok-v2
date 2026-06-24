@@ -5792,6 +5792,7 @@ document.getElementById('room-name-input').addEventListener('keydown',e=>{if(e.k
 function toggleSidebar() {
   const sidebar = document.querySelector('.sidebar');
   const overlay = document.getElementById('sidebar-overlay');
+  if(!sidebar || !overlay) return;
   const isOpen = sidebar.classList.contains('open');
   if(isOpen) { closeSidebar(); } else {
     sidebar.classList.add('open');
@@ -5799,8 +5800,10 @@ function toggleSidebar() {
   }
 }
 function closeSidebar() {
-  document.querySelector('.sidebar').classList.remove('open');
-  document.getElementById('sidebar-overlay').style.display = 'none';
+  const sidebar = document.querySelector('.sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if(sidebar) sidebar.classList.remove('open');
+  if(overlay) overlay.style.display = 'none';
 }
 
 // ===== 구글 로그인 =====
@@ -5949,13 +5952,16 @@ function renderApp() {
 }
 
 function initApp() {
-  renderApp(); // 인증 성공 후 앱 UI 렌더링 (인증 전엔 DOM에 앱 HTML 없음)
-  renderModals(); // 모달도 인증 후에만 DOM에 추가
+  try {
+    renderApp(); // 인증 성공 후 앱 UI 렌더링 (인증 전엔 DOM에 앱 HTML 없음)
+    renderModals(); // 모달도 인증 후에만 DOM에 추가
+  } catch(e) {
+    console.error('앱 렌더링 오류:', e);
+  }
   loadFromSupabase().then(ok => {
-    if (ok) {
-      document.getElementById('header-sub').textContent = '☁️ Supabase 클라우드 저장 모드';
-    } else {
-      document.getElementById('header-sub').textContent = '⚠️ 로컬 저장 모드 (Supabase 연결 실패)';
+    const headerSub = document.getElementById('header-sub');
+    if(headerSub) {
+      headerSub.textContent = ok ? '☁️ Supabase 클라우드 저장 모드' : '⚠️ 로컬 저장 모드 (Supabase 연결 실패)';
     }
     updateLogoSub();
     updateStats();
