@@ -374,7 +374,7 @@ body.is-mobile-device .dash-ai-bar{display:none!important}
 
 <!-- 건설라이브러리 뷰어 모달 (body 고정) -->
 <div id="lib-view-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:2000;flex-direction:column">
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(0,0,0,.6);flex-shrink:0">
+  <div id="lib-view-header" style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:rgba(0,0,0,.6);flex-shrink:0">
     <div>
       <div id="lib-view-title" style="font-size:15px;font-weight:700;color:#fff"></div>
       <div id="lib-view-meta" style="font-size:12px;color:rgba(255,255,255,.6);margin-top:2px"></div>
@@ -387,7 +387,7 @@ body.is-mobile-device .dash-ai-bar{display:none!important}
       <button onclick="closeLibraryDoc()" style="border:1px solid rgba(255,255,255,.4);background:rgba(255,255,255,.1);color:#fff;border-radius:9px;padding:6px 14px;font-size:12px;font-weight:700;cursor:pointer">✕ 닫기</button>
     </div>
   </div>
-  <div style="display:flex;align-items:center;justify-content:center;gap:12px;padding:8px;background:rgba(0,0,0,.4);flex-shrink:0">
+  <div id="lib-view-zoombar" style="display:flex;align-items:center;justify-content:center;gap:12px;padding:8px;background:rgba(0,0,0,.4);flex-shrink:0">
     <button onclick="libZoom(-0.2)" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;width:32px;height:32px;font-size:18px;cursor:pointer;font-weight:700">−</button>
     <span id="lib-zoom-label" style="color:#fff;font-size:13px;min-width:44px;text-align:center">100%</span>
     <button onclick="libZoom(0.2)" style="border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.1);color:#fff;border-radius:6px;width:32px;height:32px;font-size:18px;cursor:pointer;font-weight:700">+</button>
@@ -5137,12 +5137,15 @@ function printLibraryDoc() {
         flex-direction:column !important;
       }
       #lib-view-header { display:none !important; }
+      #lib-view-zoombar { display:none !important; }
       #lib-view-scroll {
         flex:1 !important;
+        overflow:visible !important;
         display:flex !important;
         align-items:center !important;
         justify-content:center !important;
         padding:0 !important;
+        background:#fff !important;
       }
       #lib-view-img {
         width:100% !important;
@@ -5150,8 +5153,6 @@ function printLibraryDoc() {
         max-height:100% !important;
         object-fit:contain !important;
       }
-      -webkit-print-color-adjust: exact;
-      print-color-adjust: exact;
     }
   `;
   document.head.appendChild(style);
