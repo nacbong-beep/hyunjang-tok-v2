@@ -4856,7 +4856,9 @@ function printLibraryDoc() {
   style.textContent = `
     @media print {
       @page { margin:5mm; size:${isLandscape ? 'landscape' : 'portrait'}; }
-      body > *:not(#lib-view-modal) { display:none !important; }
+      body * { display:none !important; }
+      #lib-view-modal,
+      #lib-view-modal * { display:revert !important; }
       #lib-view-modal {
         display:flex !important;
         position:fixed !important;
