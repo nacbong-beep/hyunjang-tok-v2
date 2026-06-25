@@ -1899,7 +1899,7 @@ async function loadAiSearchConversationList() {
   try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
   if(!userId) return [];
   try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_search_history?user_id=eq.${userId}&order=created_at.asc&limit=500&select=question,conversation_id,created_at`, {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/ai_search_history?user_id=eq.${userId}&order=created_at.desc&limit=500&select=question,conversation_id,created_at`, {
       headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
     });
     if(!res.ok) return [];
@@ -1908,7 +1908,9 @@ async function loadAiSearchConversationList() {
     rows.forEach(r => {
       if(!map[r.conversation_id]) map[r.conversation_id] = { id: r.conversation_id, firstQuestion: r.question, count: 0, lastAt: r.created_at };
       map[r.conversation_id].count++;
-      map[r.conversation_id].lastAt = r.created_at; // 오름차순이라 마지막에 덮어쓴 값이 최신
+      // 내림차순이므로 첫 번째로 만나는 항목이 최신, 마지막이 가장 오래된 것
+      map[r.conversation_id].lastAt = map[r.conversation_id].lastAt || r.created_at;
+      map[r.conversation_id].firstQuestion = r.question; // 마지막에 덮어써지는 게 가장 오래된 첫 질문
     });
     return Object.values(map).sort((a,b) => new Date(b.lastAt) - new Date(a.lastAt));
   } catch(e) { console.warn('대화 목록 로드 실패', e); return []; }
@@ -2823,8 +2825,8 @@ function saveGeminiKey() {
 
 async function aiClassifyGemini(text, roomName) {
   if(!geminiApiKey) throw new Error('Gemini API 키를 설정해주세요. (설정 → AI 분류 엔진)');
-  const TODAY = new Date().toISOString().slice(0, 10);
-  const TOMORROW = new Date(Date.now()+86400000).toISOString().slice(0,10);
+  const TODAY = todayKey();
+  const TOMORROW = addDaysKey(1);
 
   const prompt = `당신은 건설현장 카카오톡 메시지 분류 전문가입니다.
 오늘 날짜: ${TODAY}
@@ -2943,7 +2945,8 @@ function jumpToMonth(monthStr) {
   const firstDay = new Date(y, m-1, 1);
   const dow = firstDay.getDay(); // 0=일 ~ 6=토
   // 해당 월 1일 이후(포함) 첫 번째 월요일 = 첫째주 시작일
-  const daysToMon = (8 - dow) % 7;
+  // dow===1(월요일)이면 그 날 자체가 첫째 월요일이므로 0일 이동
+  const daysToMon = dow === 1 ? 0 : (8 - dow) % 7;
   const targetMon = new Date(firstDay);
   targetMon.setDate(firstDay.getDate() + daysToMon);
 
@@ -6219,10 +6222,6 @@ function renderApp() {
     </div>
     <div id="sidebar-overlay" onclick="closeSidebar()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:199"></div>
   `;
-  // 모바일 기기 판별
-  if(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
-    document.body.classList.add('is-mobile-device');
-  }
 }
 
 function initApp() {
