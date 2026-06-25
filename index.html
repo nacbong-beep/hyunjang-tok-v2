@@ -1797,39 +1797,44 @@ ${textContext}
 질문: ${question}`;
 
   const parts = [{ text: prompt }];
-  // 이미지는 첫 번째 질문에서만, 그리고 인덱스 텍스트가 없는 도면만 첨부
-  // (인덱스가 있으면 이미 분석된 텍스트로 충분 → egress 절약)
-  if(isFirstTurn) {
-    for(const doc of relDocs) {
-      if(!doc.file_url) continue;
-      if(libDocIndexCache[doc.id]) continue; // 인덱스 있으면 이미지 생략
-      try {
-        const base64 = await aiSearchUrlToBase64(doc.file_url, doc.file_path || doc.id);
-        parts.push({ inlineData: { mimeType: aiSearchGuessMime(doc.file_name || doc.file_path), data: base64 } });
-      } catch(e) { console.warn('이미지 변환 실패', doc.title, e); }
-    }
-  }
+  // 토큰 절약: 이미지 첨부 완전 비활성화 (인덱스 텍스트만 사용)
 
   aiSearchConversation.push({ role: 'user', parts });
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 45000); // 45초 넘으면 자동 중단
+  const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`;
+  const GEMINI_BODY = JSON.stringify({ contents: aiSearchConversation, generationConfig: { temperature: 0.2, maxOutputTokens: 2048 } });
+  const MAX_RETRY = 3;
   let res;
-  try {
-    res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiApiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: aiSearchConversation, generationConfig: { temperature: 0.2, maxOutputTokens: 2048 } }),
-      signal: controller.signal
-    });
-  } catch(e) {
-    aiSearchConversation.pop();
-    if(e.name === 'AbortError') throw new Error('응답이 너무 오래 걸려서 중단했어요. 다시 질문해주세요.');
-    throw e;
-  } finally {
+  for(let attempt = 1; attempt <= MAX_RETRY; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    try {
+      res = await fetch(GEMINI_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: GEMINI_BODY,
+        signal: controller.signal
+      });
+    } catch(e) {
+      clearTimeout(timeoutId);
+      aiSearchConversation.pop();
+      if(e.name === 'AbortError') throw new Error('응답이 너무 오래 걸려서 중단했어요. 다시 질문해주세요.');
+      throw e;
+    }
     clearTimeout(timeoutId);
+    if(res.status === 503 || res.status === 429) {
+      if(attempt < MAX_RETRY) {
+        const wait = attempt * 3000;
+        aiSearchShowTyping(`잠시 후 재시도합니다... (${attempt}/${MAX_RETRY-1})`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      aiSearchConversation.pop();
+      throw new Error(`Gemini API가 일시적으로 혼잡합니다 (${res.status}). 잠시 후 다시 시도해주세요.`);
+    }
+    if(!res.ok) { aiSearchConversation.pop(); throw new Error('Gemini API 오류: ' + res.status); }
+    break;
   }
-  if(!res.ok) { aiSearchConversation.pop(); throw new Error('Gemini API 오류: ' + res.status); }
   const data = await res.json();
   let answer = data.candidates?.[0]?.content?.parts?.[0]?.text || '답변을 생성하지 못했어요.';
 
@@ -5066,6 +5071,42 @@ function popoutLibraryDoc() {
   libFloatWin.focus();
 }
 
+// ===== 도면 인덱스 뷰어 모달 =====
+function openIndexViewerModal() {
+  const allDocs = (typeof inspectionDocs !== 'undefined' && inspectionDocs.length) ? inspectionDocs : libraryDocs;
+  const indexed = allDocs.filter(d => libDocIndexCache[d.id]);
+  const notIndexed = allDocs.filter(d => !libDocIndexCache[d.id]);
+
+  const itemsHtml = indexed.length === 0
+    ? `<div style="text-align:center;color:var(--muted);padding:40px 0;font-size:13px">인덱싱된 도면이 없어요.<br>설정에서 인덱싱을 먼저 진행해주세요.</div>`
+    : indexed.map(d => `
+      <div style="border:1px solid var(--border2);border-radius:10px;padding:14px;margin-bottom:10px;background:var(--surface)">
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px">📄 ${d.title || '제목 없음'}</div>
+        ${d.category ? `<div style="font-size:11px;color:var(--muted);margin-bottom:6px">📁 ${d.category}</div>` : ''}
+        <div style="font-size:12px;color:var(--soft);line-height:1.7;white-space:pre-wrap;background:var(--bg);border-radius:6px;padding:10px">${libDocIndexCache[d.id]}</div>
+      </div>`).join('')
+    + (notIndexed.length > 0 ? `
+      <div style="margin-top:16px;padding:12px;background:var(--surface);border-radius:8px;font-size:12px;color:var(--muted)">
+        ⚠️ 인덱싱 안 된 도면 ${notIndexed.length}장: ${notIndexed.map(d => d.title || '제목 없음').join(', ')}
+      </div>` : '');
+
+  const modal = document.createElement('div');
+  modal.id = 'index-viewer-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:3000;display:flex;align-items:flex-start;justify-content:center;padding:20px;overflow-y:auto';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:600px;padding:20px;margin:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="font-size:15px;font-weight:700">📋 도면 인덱스 내용</div>
+        <button onclick="document.getElementById('index-viewer-modal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">✕</button>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">총 ${allDocs.length}장 중 ${indexed.length}장 인덱싱 완료</div>
+      <div>${itemsHtml}</div>
+    </div>
+  `;
+  modal.addEventListener('click', e => { if(e.target === modal) modal.remove(); });
+  document.body.appendChild(modal);
+}
+
 // ===== 도면 AI 인덱싱 =====
 let libDocIndexCache = {}; // doc_id -> content (세션 내 캐시)
 
@@ -5279,6 +5320,7 @@ function renderSettingsView(el) {
           <button class="btn-ghost" style="flex:1" onclick="checkIndexingStatus()">📊 현황 확인</button>
           <button class="btn-primary" style="flex:2" onclick="startLibraryIndexing(null, true)">▶ 인덱싱 시작 (미완료 처리)</button>
         </div>
+        <button class="btn-ghost" style="width:100%;margin-bottom:8px" onclick="openIndexViewerModal()">📋 인덱스 내용 보기</button>
         <div id="indexing-status" style="font-size:12px;color:var(--muted)"></div>
         <div id="indexing-progress-wrap" style="display:none;margin-top:8px">
           <div style="background:var(--surface);border-radius:8px;height:8px;overflow:hidden;margin-bottom:6px">
