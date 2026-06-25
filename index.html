@@ -5789,7 +5789,7 @@ function showToast(msg) {
   setTimeout(()=>t.classList.remove('show'),2500);
 }
 
-document.getElementById('room-name-input').addEventListener('keydown',e=>{if(e.key==='Enter')confirmAddRoom();});
+// room-name-input 이벤트는 renderModals()에서 처리
 
 // ===== 모바일 사이드바 =====
 function toggleSidebar() {
