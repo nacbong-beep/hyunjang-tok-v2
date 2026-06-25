@@ -4856,9 +4856,8 @@ function printLibraryDoc() {
   style.textContent = `
     @media print {
       @page { margin:5mm; size:${isLandscape ? 'landscape' : 'portrait'}; }
-      body * { display:none !important; }
-      #lib-view-modal,
-      #lib-view-modal * { display:revert !important; }
+      body > * { display:none !important; }
+      body > #app-modals { display:block !important; }
       #lib-view-modal {
         display:flex !important;
         position:fixed !important;
@@ -4870,15 +4869,16 @@ function printLibraryDoc() {
       #lib-view-header { display:none !important; }
       #lib-view-zoombar { display:none !important; }
       #lib-view-scroll {
+        display:flex !important;
         flex:1 !important;
         overflow:visible !important;
-        display:flex !important;
         align-items:center !important;
         justify-content:center !important;
         padding:0 !important;
         background:#fff !important;
       }
       #lib-view-img {
+        display:block !important;
         width:100% !important;
         height:auto !important;
         max-height:100% !important;
