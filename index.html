@@ -298,7 +298,7 @@ body.is-mobile-device .dash-ai-bar{display:none!important}
 </style>
 </head>
 <body>
-<div class="app">
+<div class="app" id="app-root" style="visibility:hidden">
   <aside class="sidebar">
     <div class="logo" onclick="setView('dashboard')">
       <div class="logo-title">현장톡</div>
@@ -572,7 +572,7 @@ body.is-mobile-device .dash-ai-bar{display:none!important}
 </div>
 
 <!-- 로그인 모달 -->
-<div id="pw-modal" style="display:none;position:fixed;inset:0;background:#1a2332;z-index:9999;display:flex;align-items:center;justify-content:center;">
+<div id="pw-modal" style="position:fixed;inset:0;background:#1a2332;z-index:9999;display:flex;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:20px;padding:36px;width:90%;max-width:360px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.3);">
     <div style="font-size:48px;margin-bottom:12px;">🏗️</div>
     <div style="font-size:22px;font-weight:900;color:#1a2332;margin-bottom:4px;">현장톡</div>
@@ -6229,6 +6229,9 @@ function initApp() {
   if(/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent)) {
     document.body.classList.add('is-mobile-device');
   }
+  // 인증 완료 후 앱 UI 표시
+  const appRoot = document.getElementById('app-root');
+  if(appRoot) appRoot.style.visibility = '';
   loadFromSupabase().then(ok => {
     if (ok) {
       document.getElementById('header-sub').textContent = '☁️ Supabase 클라우드 저장 모드';
@@ -6244,15 +6247,13 @@ function initApp() {
   });
 }
 
-// 구글 로그인 체크
-document.getElementById('pw-modal').style.display = 'flex';
+// 구글 로그인 체크 (pw-modal은 기본 display:flex로 표시됨)
 checkAuth().then(ok => {
   if(ok) {
     document.getElementById('pw-modal').style.display = 'none';
     initApp();
-  } else {
-    document.getElementById('pw-modal').style.display = 'flex';
   }
+  // 실패 시 pw-modal이 이미 표시되어 있으므로 별도 처리 불필요
 });
 </script>
 </body>
