@@ -4251,15 +4251,16 @@ async function printInspectionFolder(folderId) {
       const filePath = doc.file_path || (doc.file_url ? doc.file_url.split('/library/')[1]?.split('?')[0] : null);
       if(filePath) url = await getLibraryFileUrl(filePath) || url;
     } catch(e) {}
-    const paperSize = item.paper_size || 'A4 portrait';
+    const paperSize = item.paper_size || 'A4 landscape';
     return { url, paper_size: paperSize, title: doc.title };
   }));
 
   const validItems = signedItems.filter(Boolean);
 
   const printWin = window.open('', '_blank');
-  const pageStyles = validItems.map((item,i) => {
-    const size = item.paper_size || 'A4 portrait';
+
+  const pageStyles = validItems.map((item, i) => {
+    const size = item.paper_size || 'A4 landscape';
     return `@page p${i}{size:${size};margin:5mm;}.pg${i}{page:p${i};}`;
   }).join('');
 
@@ -4275,9 +4276,11 @@ async function printInspectionFolder(folderId) {
       .page{height:auto;min-height:100vh;}
     }
   `;
-  const pagesHtml = validItems.map((item,i) =>
+
+  const pagesHtml = validItems.map((item, i) =>
     `<div class="page pg${i}"><img src="${item.url}" alt="${item.title}"></div>`
   ).join('');
+
   const scriptStr = 'window.onload=function(){setTimeout(function(){window.print();},800);};';
   printWin.document.write('<!DOCTYPE html><html><head><title>검측요청서</title><style>' + styleStr + '<\/style><\/head><body>' + pagesHtml + '<script>' + scriptStr + '<\/scr' + 'ipt><\/body><\/html>');
   printWin.document.close();
