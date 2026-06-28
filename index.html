@@ -521,9 +521,10 @@ function renderSidebar() {
     construction: {icon:'🏗️', label:'시공 관리'},
     inspection: {icon:'📋', label:'검측요청서'},
     todo: {icon:'✅', label:'할일', count: pending},
+    personal: {icon:'📒', label:'개인노트'},
     settings: {icon:'⚙️', label:'설정'},
   };
-  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','todo','settings'];
+  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','todo','personal','settings'];
   const menuOrder = (appSettings.menuOrder && appSettings.menuOrder.length === defaultOrder.length)
     ? appSettings.menuOrder
     : defaultOrder;
@@ -580,7 +581,7 @@ function setView(v) {
   currentView = v;
   closeSidebar();
   if(v.startsWith('cat_')) { selectedCategory=v.replace('cat_',''); currentView='search'; }
-  const titles = {dashboard:'대시보드',calendar:'캘린더',weekly:'주간업무일지',library:'공정표 관리',drawing:'도면 관리',construction:'시공 관리',inspection:'검측요청서',todo:'할일',search:'검색',ai_search:'AI 검색',input:'메시지 입력',settings:'설정'};
+  const titles = {dashboard:'대시보드',calendar:'캘린더',weekly:'주간업무일지',library:'공정표 관리',drawing:'도면 관리',construction:'시공 관리',inspection:'검측요청서',todo:'할일',personal:'개인노트',search:'검색',ai_search:'AI 검색',input:'메시지 입력',settings:'설정'};
   document.getElementById('header-title').textContent = titles[v]||(v.startsWith('cat_')?v.replace('cat_','')+'  검색':v);
   const guideEl = document.getElementById('header-guide');
   if(guideEl) guideEl.style.display = (currentView==='dashboard') ? 'block' : 'none';
@@ -597,7 +598,7 @@ function setView(v) {
   else if(currentView==='drawing') renderLibraryView(el, 'drawing');
   else if(currentView==='construction') renderLibraryView(el, 'construction');
   else if(currentView==='inspection') renderInspectionView(el);
-  else if(currentView==='settings') renderSettingsView(el);
+  else if(currentView==='personal') renderPersonalView(el);
   else if(currentView.startsWith('room_')) {
     renderRoomView(el,v);
     setTimeout(applyRoomCalLayout, 0);
@@ -5029,6 +5030,223 @@ function popoutLibraryDoc() {
   libFloatWin.focus();
 }
 
+
+// ===== 개인노트 =====
+let personalNotes = [];
+const PERSONAL_CATS = ['전체','투자기록','쇼핑목록','할일','약속','메모'];
+const PERSONAL_CAT_COLORS = {투자기록:'#10b981',쇼핑목록:'#f59e0b',할일:'#3b82f6',약속:'#8b5cf6',메모:'#6b7280'};
+let personalCatFilter = '전체';
+
+async function loadPersonalNotes() {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  const userId = localStorage.getItem('hj_uid');
+  if(!userId) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/personal_notes?user_id=eq.${userId}&order=created_at.desc`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+    });
+    if(res.ok) personalNotes = await res.json();
+  } catch(e) { console.warn('personal notes load error', e); }
+}
+
+async function savePersonalNote(note) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  const userId = localStorage.getItem('hj_uid');
+  const payload = { user_id: userId, title: note.title, memo: note.memo||'', category: note.category||'메모', due_date: note.due_date||null, done: false };
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/personal_notes`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify(payload)
+  });
+  if(res.ok) { const rows = await res.json(); personalNotes.unshift(rows[0]); }
+}
+
+async function updatePersonalNote(id, patch) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  await fetch(`${SUPABASE_URL}/rest/v1/personal_notes?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch)
+  });
+  personalNotes = personalNotes.map(n => n.id === id ? {...n, ...patch} : n);
+}
+
+async function deletePersonalNote(id) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  await fetch(`${SUPABASE_URL}/rest/v1/personal_notes?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+  });
+  personalNotes = personalNotes.filter(n => n.id !== id);
+}
+
+async function togglePersonalDone(id) {
+  const note = personalNotes.find(n => n.id === id);
+  if(!note) return;
+  const done = !note.done;
+  await updatePersonalNote(id, { done, done_at: done ? new Date().toISOString() : null });
+  renderPersonalView(document.getElementById('main-content'));
+}
+
+function openPersonalAddModal(editNote = null) {
+  const existing = document.getElementById('personal-add-modal');
+  if(existing) existing.remove();
+  const selectedCat = editNote?.category || '메모';
+  const modal = document.createElement('div');
+  modal.id = 'personal-add-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:420px;padding:20px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:16px">${editNote ? '노트 수정' : '노트 추가'}</div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">카테고리</div>
+        <div id="pn-cat-wrap" style="display:flex;gap:6px;flex-wrap:wrap">
+          ${PERSONAL_CATS.filter(c=>c!=='전체').map(c=>`
+            <div data-cat="${c}" class="pn-cat-btn" style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${c===selectedCat?'var(--primary)':'var(--border2)'};background:${c===selectedCat?'var(--primary)':'var(--surface)'};color:${c===selectedCat?'#fff':'var(--muted)'}">${c}</div>
+          `).join('')}
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">제목 *</div>
+        <input id="pn-title" class="modal-input" value="${editNote?.title||''}" placeholder="제목을 입력하세요" style="width:100%">
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">내용</div>
+        <textarea id="pn-memo" class="modal-input" style="width:100%;height:80px;resize:none" placeholder="내용을 입력하세요">${editNote?.memo||''}</textarea>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">기한 (선택)</div>
+        <input id="pn-due" type="date" class="modal-input" value="${editNote?.due_date||''}" style="width:100%">
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn-ghost" style="flex:1" onclick="document.getElementById('personal-add-modal').remove()">취소</button>
+        <button class="btn-primary" style="flex:2" onclick="confirmPersonalNote('${editNote?.id||''}')">저장</button>
+      </div>
+    </div>
+  `;
+  modal.querySelectorAll('.pn-cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      modal.querySelectorAll('.pn-cat-btn').forEach(b => {
+        b.style.background='var(--surface)'; b.style.color='var(--muted)'; b.style.borderColor='var(--border2)';
+      });
+      btn.style.background='var(--primary)'; btn.style.color='#fff'; btn.style.borderColor='var(--primary)';
+    });
+  });
+  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('pn-title')?.focus(), 50);
+}
+
+async function confirmPersonalNote(editId) {
+  const modal = document.getElementById('personal-add-modal');
+  const title = document.getElementById('pn-title')?.value.trim();
+  const memo = document.getElementById('pn-memo')?.value.trim();
+  const due = document.getElementById('pn-due')?.value;
+  const catBtn = modal?.querySelector('.pn-cat-btn[style*="var(--primary)"]');
+  const category = catBtn?.dataset.cat || '메모';
+  if(!title) { showToast('제목을 입력해주세요.'); return; }
+  if(editId) {
+    await updatePersonalNote(editId, { title, memo, due_date: due||null, category });
+    showToast('✅ 수정됐어요.');
+  } else {
+    await savePersonalNote({ title, memo, due_date: due||null, category });
+    showToast('✅ 추가됐어요.');
+  }
+  modal?.remove();
+  renderPersonalView(document.getElementById('main-content'));
+}
+
+function renderPersonalView(el) {
+  if(!el) return;
+  const today = todayKey();
+  const thisWeekEnd = (() => {
+    const d = new Date();
+    const kst = new Date(d.getTime() + 9*60*60*1000);
+    kst.setDate(kst.getDate() + (7 - kst.getDay()));
+    return kst.toISOString().slice(0,10);
+  })();
+  const filtered = personalCatFilter === '전체' ? personalNotes : personalNotes.filter(n => n.category === personalCatFilter);
+  const undone = filtered.filter(n => !n.done);
+  const done = filtered.filter(n => n.done);
+  const overdue = undone.filter(n => n.due_date && n.due_date < today);
+  const dueToday = undone.filter(n => n.due_date === today);
+  const dueWeek = undone.filter(n => n.due_date && n.due_date > today && n.due_date <= thisWeekEnd);
+  const noDue = undone.filter(n => !n.due_date);
+
+  function noteCard(n) {
+    const catColor = PERSONAL_CAT_COLORS[n.category] || '#6b7280';
+    const isOverdue = n.due_date && n.due_date < today && !n.done;
+    const dueTxt = n.due_date ? (isOverdue ? `⚠️ ${n.due_date} 기한 지남` : n.due_date) : '';
+    const noteJson = encodeURIComponent(JSON.stringify(n));
+    return `
+      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;border:0.5px solid var(--border2);margin-bottom:6px;background:var(--card)">
+        <div onclick="togglePersonalDone('${n.id}')" style="width:20px;height:20px;border-radius:50%;border:1.5px solid ${n.done?catColor:'var(--border2)'};background:${n.done?catColor:'transparent'};flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;cursor:pointer">
+          ${n.done?'<svg width="10" height="8" viewBox="0 0 10 8"><polyline points="1,4 4,7 9,1" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>':''}
+        </div>
+        <div style="flex:1;min-width:0;cursor:pointer" onclick="openPersonalEditModal('${n.id}')">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap">
+            <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:${catColor}22;color:${catColor}">${n.category}</span>
+            ${dueTxt?`<span style="font-size:11px;color:${isOverdue?'#ef4444':'var(--muted)'};font-weight:${isOverdue?'600':'400'}">${dueTxt}</span>`:''}
+          </div>
+          <div style="font-size:13px;color:var(--text);font-weight:500;${n.done?'text-decoration:line-through;opacity:0.5':''}">${n.title}</div>
+          ${n.memo?`<div style="font-size:11px;color:var(--muted);margin-top:2px;${n.done?'opacity:0.5':''}">${n.memo}</div>`:''}
+        </div>
+        <button onclick="if(confirm('삭제할까요?')){deletePersonalNote('${n.id}').then(()=>renderPersonalView(document.getElementById('main-content')))}" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:2px 4px;flex-shrink:0">🗑️</button>
+      </div>`;
+  }
+
+  function section(label, notes, color='var(--muted)') {
+    if(!notes.length) return '';
+    return `
+      <div style="margin-bottom:1.2rem">
+        <div style="font-size:11px;font-weight:600;color:${color};padding-bottom:6px;border-bottom:0.5px solid var(--border2);margin-bottom:8px;display:flex;justify-content:space-between">
+          <span>${label}</span><span>${notes.length}건</span>
+        </div>
+        ${notes.map(noteCard).join('')}
+      </div>`;
+  }
+
+  const isEmpty = personalNotes.length === 0;
+  el.innerHTML = `
+    <div style="max-width:700px;margin:0 auto;padding:20px 16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+        <div style="font-size:18px;font-weight:700;color:var(--text)">개인노트</div>
+        <button class="btn-primary" onclick="openPersonalAddModal()" style="padding:7px 16px;font-size:13px">+ 추가</button>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">
+        ${PERSONAL_CATS.map(c=>`
+          <div onclick="personalCatFilter='${c}';renderPersonalView(document.getElementById('main-content'))"
+            style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid ${personalCatFilter===c?'var(--primary)':'var(--border2)'};background:${personalCatFilter===c?'var(--primary)':'var(--surface)'};color:${personalCatFilter===c?'#fff':'var(--muted)'}">
+            ${c}
+          </div>`).join('')}
+      </div>
+      ${isEmpty
+        ? `<div style="text-align:center;padding:60px 0;color:var(--muted)">
+            <div style="font-size:32px;margin-bottom:12px">📒</div>
+            <div style="font-size:14px;font-weight:500">아직 노트가 없어요</div>
+            <div style="font-size:12px;margin-top:6px">+ 추가 버튼으로 첫 노트를 작성해보세요</div>
+          </div>`
+        : `${section('기한 지남', overdue, '#ef4444')}
+           ${section('오늘', dueToday, '#f59e0b')}
+           ${section('이번 주', dueWeek, 'var(--primary)')}
+           ${section('기한 없음', noDue)}
+           ${done.length?`<div style="height:0.5px;background:var(--border2);margin:1rem 0"></div>${section('완료', done)}`:''}
+          `
+      }
+    </div>
+  `;
+
+  if(isEmpty) {
+    loadPersonalNotes().then(() => {
+      if(personalNotes.length > 0) renderPersonalView(el);
+    });
+  }
+}
+
+function openPersonalEditModal(id) {
+  const note = personalNotes.find(n => n.id === id);
+  if(note) openPersonalAddModal(note);
+}
 
 function renderSettingsView(el) {
   el.innerHTML = `
