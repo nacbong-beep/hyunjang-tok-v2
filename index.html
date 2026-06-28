@@ -5140,6 +5140,9 @@ function openPersonalEventModal(dateStr, editId = null) {
     });
   });
   modal._getSelectedColor = () => selectedColor;
+  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('pev-title')?.focus(), 50);
 }
 
 async function confirmSavePersonalEvent(editId) {
