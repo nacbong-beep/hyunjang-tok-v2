@@ -5181,7 +5181,7 @@ function renderPersonalView(el) {
     const isOverdue = n.due_date && n.due_date < today && !n.done;
     const dueTxt = n.due_date ? (isOverdue ? `⚠️ 기한 지남` : n.due_date) : '';
     return `
-      <div style="background:var(--card);border:0.5px solid var(--border2);border-radius:14px;padding:16px;min-height:120px;display:flex;flex-direction:column;cursor:pointer;${n.done?'opacity:0.5':''}" onclick="openPersonalEditModal('${n.id}')">
+      <div style="background:var(--card);border:0.5px solid var(--border2);border-radius:14px;padding:16px;min-height:180px;display:flex;flex-direction:column;cursor:pointer;${n.done?'opacity:0.5':''}" onclick="openPersonalEditModal('${n.id}')">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:${catColor}22;color:${catColor}">${n.category}</span>
           <div style="display:flex;align-items:center;gap:6px">
@@ -5214,8 +5214,7 @@ function renderPersonalView(el) {
   el.innerHTML = `
     <div style="padding:20px 16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-        <div style="font-size:18px;font-weight:700;color:var(--text)">개인노트</div>
-        <button class="btn-primary" onclick="openPersonalAddModal()" style="padding:7px 16px;font-size:13px">+ 추가</button>
+        <button class="btn-primary" onclick="openPersonalAddModal()" style="padding:7px 16px;font-size:13px;margin-left:auto">+ 추가</button>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">
         ${PERSONAL_CATS.map(c=>`
