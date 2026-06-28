@@ -5178,33 +5178,33 @@ function renderPersonalView(el) {
   function noteCard(n) {
     const catColor = PERSONAL_CAT_COLORS[n.category] || '#6b7280';
     const isOverdue = n.due_date && n.due_date < today && !n.done;
-    const dueTxt = n.due_date ? (isOverdue ? `⚠️ ${n.due_date} 기한 지남` : n.due_date) : '';
-    const noteJson = encodeURIComponent(JSON.stringify(n));
+    const dueTxt = n.due_date ? (isOverdue ? `⚠️ 기한 지남` : n.due_date) : '';
     return `
-      <div style="display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;border:0.5px solid var(--border2);margin-bottom:6px;background:var(--card)">
-        <div onclick="togglePersonalDone('${n.id}')" style="width:20px;height:20px;border-radius:50%;border:1.5px solid ${n.done?catColor:'var(--border2)'};background:${n.done?catColor:'transparent'};flex-shrink:0;margin-top:2px;display:flex;align-items:center;justify-content:center;cursor:pointer">
-          ${n.done?'<svg width="10" height="8" viewBox="0 0 10 8"><polyline points="1,4 4,7 9,1" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>':''}
-        </div>
-        <div style="flex:1;min-width:0;cursor:pointer" onclick="openPersonalEditModal('${n.id}')">
-          <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap">
-            <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:${catColor}22;color:${catColor}">${n.category}</span>
+      <div style="background:var(--card);border:0.5px solid var(--border2);border-radius:14px;padding:14px 16px;cursor:pointer;${n.done?'opacity:0.5':''}" onclick="openPersonalEditModal('${n.id}')">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:${catColor}22;color:${catColor}">${n.category}</span>
+          <div style="display:flex;align-items:center;gap:8px">
             ${dueTxt?`<span style="font-size:11px;color:${isOverdue?'#ef4444':'var(--muted)'};font-weight:${isOverdue?'600':'400'}">${dueTxt}</span>`:''}
+            ${n.due_date&&!isOverdue?`<span style="font-size:11px;color:var(--muted)">${n.due_date}</span>`:''}
+            <button onclick="event.stopPropagation();togglePersonalDone('${n.id}')" style="background:none;border:none;cursor:pointer;padding:0;font-size:14px">${n.done?'✅':'⬜'}</button>
+            <button onclick="event.stopPropagation();if(confirm('삭제할까요?')){deletePersonalNote('${n.id}').then(()=>renderPersonalView(document.getElementById('main-content')))}" style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:0">🗑️</button>
           </div>
-          <div style="font-size:13px;color:var(--text);font-weight:500;${n.done?'text-decoration:line-through;opacity:0.5':''}">${n.title}</div>
-          ${n.memo?`<div style="font-size:11px;color:var(--muted);margin-top:2px;${n.done?'opacity:0.5':''}">${n.memo}</div>`:''}
         </div>
-        <button onclick="if(confirm('삭제할까요?')){deletePersonalNote('${n.id}').then(()=>renderPersonalView(document.getElementById('main-content')))}" style="background:none;border:none;color:var(--muted);font-size:14px;cursor:pointer;padding:2px 4px;flex-shrink:0">🗑️</button>
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;${n.done?'text-decoration:line-through':''}">${n.title}</div>
+        ${n.memo?`<div style="font-size:12px;color:var(--muted);line-height:1.5">${n.memo}</div>`:''}
       </div>`;
   }
 
   function section(label, notes, color='var(--muted)') {
     if(!notes.length) return '';
     return `
-      <div style="margin-bottom:1.2rem">
-        <div style="font-size:11px;font-weight:600;color:${color};padding-bottom:6px;border-bottom:0.5px solid var(--border2);margin-bottom:8px;display:flex;justify-content:space-between">
+      <div style="margin-bottom:1.5rem">
+        <div style="font-size:11px;font-weight:600;color:${color};margin-bottom:10px;display:flex;justify-content:space-between">
           <span>${label}</span><span>${notes.length}건</span>
         </div>
-        ${notes.map(noteCard).join('')}
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+          ${notes.map(noteCard).join('')}
+        </div>
       </div>`;
   }
 
