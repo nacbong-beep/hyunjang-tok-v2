@@ -5032,6 +5032,195 @@ function popoutLibraryDoc() {
 }
 
 
+// ===== 개인 캘린더 =====
+let personalEvents = [];
+let pCalYear = new Date().getFullYear();
+let pCalMonth = new Date().getMonth();
+
+async function loadPersonalEvents() {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  let userId = null;
+  try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
+  if(!userId) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/personal_events?user_id=eq.${userId}&order=date.asc`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+    });
+    if(res.ok) personalEvents = await res.json();
+  } catch(e) { console.warn('personal events load error', e); }
+}
+
+async function savePersonalEvent(ev) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  let userId = null;
+  try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
+  const payload = { user_id: userId, date: ev.date, end_date: ev.end_date||null, title: ev.title, memo: ev.memo||'', color: ev.color||'#3b82f6' };
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/personal_events`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify(payload)
+  });
+  if(res.ok) { const rows = await res.json(); personalEvents.push(rows[0]); }
+}
+
+async function updatePersonalEvent(id, patch) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  await fetch(`${SUPABASE_URL}/rest/v1/personal_events?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch)
+  });
+  personalEvents = personalEvents.map(e => e.id === id ? {...e, ...patch} : e);
+}
+
+async function deletePersonalEvent(id) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  await fetch(`${SUPABASE_URL}/rest/v1/personal_events?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+  });
+  personalEvents = personalEvents.filter(e => e.id !== id);
+}
+
+function pCalNav(dir) {
+  if(dir === 0) { pCalYear = new Date().getFullYear(); pCalMonth = new Date().getMonth(); }
+  else { pCalMonth += dir; if(pCalMonth > 11) { pCalMonth = 0; pCalYear++; } else if(pCalMonth < 0) { pCalMonth = 11; pCalYear--; } }
+  renderPersonalView(document.getElementById('main-content'));
+}
+
+function openPersonalEventModal(dateStr, editId = null) {
+  const existing = document.getElementById('personal-event-modal');
+  if(existing) existing.remove();
+  const ev = editId ? personalEvents.find(e => e.id === editId) : null;
+  const colors = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#ec4899','#06b6d4'];
+  const modal = document.createElement('div');
+  modal.id = 'personal-event-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:400px;padding:20px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:16px">${ev ? '일정 수정' : '일정 추가'}</div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">제목 *</div>
+        <input id="pev-title" class="modal-input" value="${ev?.title||''}" placeholder="일정 제목" style="width:100%">
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div style="flex:1">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px">날짜 *</div>
+          <input id="pev-date" type="date" class="modal-input" value="${ev?.date||dateStr||''}" style="width:100%">
+        </div>
+        <div style="flex:1">
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px">종료일 (선택)</div>
+          <input id="pev-end" type="date" class="modal-input" value="${ev?.end_date||''}" style="width:100%">
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">메모</div>
+        <input id="pev-memo" class="modal-input" value="${ev?.memo||''}" placeholder="메모 (선택)" style="width:100%">
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">색상</div>
+        <div style="display:flex;gap:8px">
+          ${colors.map(c=>`<div onclick="this.parentNode.querySelectorAll('div').forEach(d=>d.style.outline='none');this.style.outline='2.5px solid '+this.dataset.color" data-color="${c}" style="width:22px;height:22px;border-radius:50%;background:${c};cursor:pointer;outline:${(ev?.color||'#3b82f6')===c?'2.5px solid '+c:'none'};outline-offset:2px"></div>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px">
+        ${ev ? `<button class="btn-ghost" style="flex:1;color:#ef4444" onclick="confirmDeletePersonalEvent('${ev.id}')">삭제</button>` : ''}
+        <button class="btn-ghost" style="flex:1" onclick="document.getElementById('personal-event-modal').remove()">취소</button>
+        <button class="btn-primary" style="flex:2" onclick="confirmSavePersonalEvent('${editId||''}')">저장</button>
+      </div>
+    </div>
+  `;
+  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('pev-title')?.focus(), 50);
+}
+
+async function confirmSavePersonalEvent(editId) {
+  const modal = document.getElementById('personal-event-modal');
+  const title = document.getElementById('pev-title')?.value.trim();
+  const date = document.getElementById('pev-date')?.value;
+  const end_date = document.getElementById('pev-end')?.value || null;
+  const memo = document.getElementById('pev-memo')?.value.trim();
+  const colorEl = modal?.querySelector('div[data-color][style*="outline:2.5px"]') || modal?.querySelector('div[data-color]');
+  const color = colorEl?.dataset.color || '#3b82f6';
+  if(!title || !date) { showToast('제목과 날짜를 입력해주세요.'); return; }
+  if(editId) {
+    await updatePersonalEvent(editId, { title, date, end_date, memo, color });
+    showToast('✅ 수정됐어요.');
+  } else {
+    await savePersonalEvent({ title, date, end_date, memo, color });
+    showToast('✅ 추가됐어요.');
+  }
+  modal?.remove();
+  renderPersonalView(document.getElementById('main-content'));
+}
+
+async function confirmDeletePersonalEvent(id) {
+  if(!confirm('이 일정을 삭제할까요?')) return;
+  document.getElementById('personal-event-modal')?.remove();
+  await deletePersonalEvent(id);
+  showToast('🗑️ 삭제됐어요.');
+  renderPersonalView(document.getElementById('main-content'));
+}
+
+function renderPersonalCalendar() {
+  const y = pCalYear, mo = pCalMonth;
+  const firstDay = new Date(y, mo, 1).getDay();
+  const daysInMonth = new Date(y, mo+1, 0).getDate();
+  const monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  const cells = [];
+  for(let i=0; i<firstDay; i++) cells.push(null);
+  for(let d=1; d<=daysInMonth; d++) cells.push(new Date(y, mo, d));
+
+  const upcomingEvs = personalEvents
+    .filter(e => e.date >= todayKey())
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .slice(0, 5);
+
+  return `
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="calendar-card" style="border:none;padding:0;background:transparent">
+        <div class="calendar-head">
+          <div style="display:flex;align-items:center;gap:8px">
+            <button onclick="pCalNav(-1)" style="height:28px;min-width:28px;border:1px solid var(--border2);background:var(--card);border-radius:8px;font-size:14px;color:var(--muted);font-weight:700;cursor:pointer;padding:0 8px">‹</button>
+            <div class="calendar-title">${y}년 ${monthNames[mo]}</div>
+            <button onclick="pCalNav(1)" style="height:28px;min-width:28px;border:1px solid var(--border2);background:var(--card);border-radius:8px;font-size:14px;color:var(--muted);font-weight:700;cursor:pointer;padding:0 8px">›</button>
+          </div>
+          <button onclick="pCalNav(0)" style="height:28px;border:1px solid var(--border2);background:var(--card);border-radius:8px;font-size:12px;color:var(--muted);font-weight:700;cursor:pointer;padding:0 12px">오늘</button>
+        </div>
+        <div class="calendar-grid">
+          ${['일','월','화','수','목','금','토'].map(d=>`<div class="day-label">${d}</div>`).join('')}
+          ${cells.map((date, i) => {
+            if(!date) return '<div class="cal-cell" data-dk=""></div>';
+            const dk = dateKey(date);
+            const dayEvs = personalEvents.filter(e => e.date === dk || (e.end_date && e.date <= dk && e.end_date >= dk));
+            const isToday = isSameDay(date, new Date());
+            const isSun = i % 7 === 0;
+            return `<div class="cal-cell ${isToday?'today':''} ${isSun?'sunday':''} ${dayEvs.length?'has-custom':''}" data-dk="${dk}" onclick="openPersonalEventModal('${dk}')">
+              <div class="cal-date"><span>${date.getDate()}</span></div>
+              ${dayEvs.slice(0,3).map(e=>`<span class="cal-event custom-ev" onclick="event.stopPropagation();openPersonalEventModal('${dk}','${e.id}')" style="${e.color?'background:'+e.color+'22;color:'+e.color:''}">${e.title}</span>`).join('')}
+              ${dayEvs.length>3?`<span class="cal-more">+${dayEvs.length-3}</span>`:''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="panel-title">다가오는 일정</div>
+          <button class="btn-primary" style="font-size:11px;padding:5px 10px" onclick="openPersonalEventModal('${todayKey()}')">+ 추가</button>
+        </div>
+        ${upcomingEvs.length ? upcomingEvs.map(e=>`
+          <div class="mini-schedule" style="cursor:pointer;border-left-color:${e.color||'#3b82f6'}" onclick="openPersonalEventModal('${e.date}','${e.id}')">
+            <div class="mini-date" style="color:${e.color||'#3b82f6'}">${formatDate(e.date)}${e.end_date?' ~ '+formatDate(e.end_date):''}</div>
+            <div class="mini-text">${e.title}</div>
+            ${e.memo?`<div class="meta">${e.memo}</div>`:''}
+          </div>`).join('')
+        : '<div class="empty-box">다가오는 일정이 없습니다.</div>'}
+      </div>
+    </div>
+  `;
+}
+
 // ===== 개인노트 =====
 let personalNotes = [];
 const PERSONAL_CATS_DEFAULT = ['투자기록','쇼핑목록','할일','약속','메모'];
@@ -5165,9 +5354,12 @@ async function confirmPersonalNote(editId) {
 
 function renderPersonalView(el) {
   if(!el) return;
-  // 데이터 없으면 로드 후 재렌더
-  if(personalNotes.length === 0) {
-    loadPersonalNotes().then(() => _renderPersonalView(el));
+  const needLoad = personalNotes.length === 0 || personalEvents.length === 0;
+  if(needLoad) {
+    Promise.all([
+      personalNotes.length === 0 ? loadPersonalNotes() : Promise.resolve(),
+      personalEvents.length === 0 ? loadPersonalEvents() : Promise.resolve()
+    ]).then(() => _renderPersonalView(el));
     return;
   }
   _renderPersonalView(el);
@@ -5226,31 +5418,38 @@ function _renderPersonalView(el) {
 
   const isEmpty = personalNotes.length === 0;
   el.innerHTML = `
-    <div style="padding:12px 16px">
-      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:16px">
-        ${['전체',...getPersonalCats()].map(c=>`
-          <div onclick="personalCatFilter='${c}';renderPersonalView(document.getElementById('main-content'))"
-            style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid ${personalCatFilter===c?'var(--primary)':'var(--border2)'};background:${personalCatFilter===c?'var(--primary)':'var(--surface)'};color:${personalCatFilter===c?'#fff':'var(--muted)'}">
-            ${c}
-          </div>`).join('')}
-        <button class="btn-primary" onclick="openPersonalAddModal()" style="padding:5px 14px;font-size:12px;margin-left:auto">+ 추가</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:12px 16px;align-items:start">
+      <div>
+        ${renderPersonalCalendar()}
       </div>
-      ${isEmpty
-        ? `<div style="text-align:center;padding:60px 0;color:var(--muted)">
-            <div style="font-size:32px;margin-bottom:12px">📒</div>
-            <div style="font-size:14px;font-weight:500">아직 노트가 없어요</div>
-            <div style="font-size:12px;margin-top:6px">+ 추가 버튼으로 첫 노트를 작성해보세요</div>
-          </div>`
-        : `${section('기한 지남', overdue, '#ef4444')}
-           ${section('오늘', dueToday, '#f59e0b')}
-           ${section('이번 주', dueWeek, 'var(--primary)')}
-           ${section('기한 없음', noDue)}
-           ${done.length?`<div style="height:0.5px;background:var(--border2);margin:1rem 0"></div>${section('완료', done)}`:''}
-          `
-      }
+      <div>
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px">
+          ${['전체',...getPersonalCats()].map(c=>`
+            <div onclick="personalCatFilter='${c}';renderPersonalView(document.getElementById('main-content'))"
+              style="padding:4px 12px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid ${personalCatFilter===c?'var(--primary)':'var(--border2)'};background:${personalCatFilter===c?'var(--primary)':'var(--surface)'};color:${personalCatFilter===c?'#fff':'var(--muted)'}">
+              ${c}
+            </div>`).join('')}
+          <button class="btn-primary" onclick="openPersonalAddModal()" style="padding:4px 12px;font-size:12px;margin-left:auto">+ 추가</button>
+        </div>
+        ${isEmpty
+          ? `<div style="text-align:center;padding:40px 0;color:var(--muted)">
+              <div style="font-size:28px;margin-bottom:10px">📒</div>
+              <div style="font-size:13px;font-weight:500">아직 노트가 없어요</div>
+            </div>`
+          : `${section('기한 지남', overdue, '#ef4444')}
+             ${section('오늘', dueToday, '#f59e0b')}
+             ${section('이번 주', dueWeek, 'var(--primary)')}
+             ${section('기한 없음', noDue)}
+             ${done.length?`<div style="height:0.5px;background:var(--border2);margin:1rem 0"></div>${section('완료', done)}`:''}`
+        }
+      </div>
     </div>
+    <style>
+      @media(max-width:700px){
+        #main-content > div { grid-template-columns:1fr!important; }
+      }
+    </style>
   `;
-
 }
 
 function openPersonalEditModal(id) {
