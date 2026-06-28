@@ -5360,9 +5360,10 @@ function initMenuOrderList() {
     construction: {icon:'🏗️', label:'시공 관리'},
     inspection: {icon:'📋', label:'검측요청서'},
     todo: {icon:'✅', label:'할일'},
+    personal: {icon:'📒', label:'개인노트'},
     settings: {icon:'⚙️', label:'설정'},
   };
-  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','todo','settings'];
+  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','todo','personal','settings'];
   let order = (appSettings.menuOrder && appSettings.menuOrder.length === defaultOrder.length)
     ? [...appSettings.menuOrder]
     : [...defaultOrder];
