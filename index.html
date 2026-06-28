@@ -5163,8 +5163,9 @@ async function confirmPersonalNote(editId) {
   renderPersonalView(document.getElementById('main-content'));
 }
 
-function renderPersonalView(el) {
+async function renderPersonalView(el) {
   if(!el) return;
+  if(personalNotes.length === 0) await loadPersonalNotes();
   const today = todayKey();
   const thisWeekEnd = (() => {
     const d = new Date();
@@ -5243,11 +5244,6 @@ function renderPersonalView(el) {
     </div>
   `;
 
-  if(isEmpty) {
-    loadPersonalNotes().then(() => {
-      if(personalNotes.length > 0) renderPersonalView(el);
-    });
-  }
 }
 
 function openPersonalEditModal(id) {
