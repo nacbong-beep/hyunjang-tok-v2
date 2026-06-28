@@ -5227,15 +5227,13 @@ function _renderPersonalView(el) {
   const isEmpty = personalNotes.length === 0;
   el.innerHTML = `
     <div style="padding:12px 16px">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-        <button class="btn-primary" onclick="openPersonalAddModal()" style="padding:7px 16px;font-size:13px">+ 추가</button>
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:16px">
         ${['전체',...getPersonalCats()].map(c=>`
           <div onclick="personalCatFilter='${c}';renderPersonalView(document.getElementById('main-content'))"
             style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid ${personalCatFilter===c?'var(--primary)':'var(--border2)'};background:${personalCatFilter===c?'var(--primary)':'var(--surface)'};color:${personalCatFilter===c?'#fff':'var(--muted)'}">
             ${c}
           </div>`).join('')}
+        <button class="btn-primary" onclick="openPersonalAddModal()" style="padding:5px 14px;font-size:12px;margin-left:auto">+ 추가</button>
       </div>
       ${isEmpty
         ? `<div style="text-align:center;padding:60px 0;color:var(--muted)">
