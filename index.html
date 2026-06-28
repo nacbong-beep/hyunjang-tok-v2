@@ -599,6 +599,7 @@ function setView(v) {
   else if(currentView==='construction') renderLibraryView(el, 'construction');
   else if(currentView==='inspection') renderInspectionView(el);
   else if(currentView==='personal') renderPersonalView(el);
+  else if(currentView==='settings') renderSettingsView(el);
   else if(currentView.startsWith('room_')) {
     renderRoomView(el,v);
     setTimeout(applyRoomCalLayout, 0);
