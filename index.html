@@ -5034,9 +5034,13 @@ function popoutLibraryDoc() {
 
 // ===== 개인노트 =====
 let personalNotes = [];
-const PERSONAL_CATS = ['전체','투자기록','쇼핑목록','할일','약속','메모'];
+const PERSONAL_CATS_DEFAULT = ['투자기록','쇼핑목록','할일','약속','메모'];
 const PERSONAL_CAT_COLORS = {투자기록:'#10b981',쇼핑목록:'#f59e0b',할일:'#3b82f6',약속:'#8b5cf6',메모:'#6b7280'};
 let personalCatFilter = '전체';
+
+function getPersonalCats() {
+  return appSettings.personalCategories || PERSONAL_CATS_DEFAULT;
+}
 
 async function loadPersonalNotes() {
   const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
@@ -5104,7 +5108,7 @@ function openPersonalAddModal(editNote = null) {
       <div style="margin-bottom:12px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">카테고리</div>
         <div id="pn-cat-wrap" style="display:flex;gap:6px;flex-wrap:wrap">
-          ${PERSONAL_CATS.filter(c=>c!=='전체').map(c=>`
+          ${getPersonalCats().map(c=>`
             <div data-cat="${c}" class="pn-cat-btn" style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${c===selectedCat?'var(--primary)':'var(--border2)'};background:${c===selectedCat?'var(--primary)':'var(--surface)'};color:${c===selectedCat?'#fff':'var(--muted)'}">${c}</div>
           `).join('')}
         </div>
@@ -5217,7 +5221,7 @@ function renderPersonalView(el) {
         <button class="btn-primary" onclick="openPersonalAddModal()" style="padding:7px 16px;font-size:13px">+ 추가</button>
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:20px">
-        ${PERSONAL_CATS.map(c=>`
+        ${['전체',...getPersonalCats()].map(c=>`
           <div onclick="personalCatFilter='${c}';renderPersonalView(document.getElementById('main-content'))"
             style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid ${personalCatFilter===c?'var(--primary)':'var(--border2)'};background:${personalCatFilter===c?'var(--primary)':'var(--surface)'};color:${personalCatFilter===c?'#fff':'var(--muted)'}">
             ${c}
@@ -5249,6 +5253,31 @@ function renderPersonalView(el) {
 function openPersonalEditModal(id) {
   const note = personalNotes.find(n => n.id === id);
   if(note) openPersonalAddModal(note);
+}
+
+function addPersonalCat() {
+  const input = document.getElementById('new-personal-cat');
+  const name = input?.value.trim();
+  if(!name) { showToast('카테고리 이름을 입력해주세요.'); return; }
+  const cats = appSettings.personalCategories || ['투자기록','쇼핑목록','할일','약속','메모'];
+  if(cats.includes(name)) { showToast('이미 있는 카테고리예요.'); return; }
+  appSettings.personalCategories = [...cats, name];
+  save();
+  input.value = '';
+  renderSettingsView(document.getElementById('main-content'));
+  showToast('✅ 카테고리가 추가됐어요.');
+}
+
+async function deletePersonalCat(cat) {
+  if(!confirm(`"${cat}" 카테고리를 삭제할까요?\n해당 카테고리의 노트는 "메모"로 변경됩니다.`)) return;
+  const cats = appSettings.personalCategories || ['투자기록','쇼핑목록','할일','약속','메모'];
+  appSettings.personalCategories = cats.filter(c => c !== cat);
+  save();
+  // 해당 카테고리 노트를 "메모"로 변경
+  const affected = personalNotes.filter(n => n.category === cat);
+  await Promise.all(affected.map(n => updatePersonalNote(n.id, { category: '메모' })));
+  renderSettingsView(document.getElementById('main-content'));
+  showToast(`✅ "${cat}" 카테고리가 삭제됐어요.`);
 }
 
 function renderSettingsView(el) {
@@ -5285,6 +5314,24 @@ function renderSettingsView(el) {
             <div id="gemini-models-result" style="margin-top:8px;font-size:11px;color:var(--muted);max-height:150px;overflow-y:auto"></div>
           </div>
           <div style="font-size:11px;color:var(--muted)">현재: ${aiEngine==='claude'?'Claude Haiku (AI 분류 + AI 검색)':'Gemini Flash (AI 분류 + AI 검색)'}</div>
+        </div>
+      </div>
+
+      <!-- 개인노트 카테고리 -->
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">📒 개인노트 카테고리</div></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">카테고리를 추가하거나 삭제할 수 있어요. 삭제 시 해당 카테고리의 노트는 "메모"로 변경됩니다.</div>
+        <div id="personal-cat-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+          ${(appSettings.personalCategories || ['투자기록','쇼핑목록','할일','약속','메모']).map((cat,i) => `
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
+              <span style="flex:1;font-size:13px;color:var(--text)">${cat}</span>
+              <button onclick="deletePersonalCat('${cat}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>
+            </div>
+          `).join('')}
+        </div>
+        <div style="display:flex;gap:8px">
+          <input id="new-personal-cat" class="modal-input" placeholder="새 카테고리 이름" style="flex:1">
+          <button class="btn-primary" onclick="addPersonalCat()" style="padding:8px 14px;white-space:nowrap">추가</button>
         </div>
       </div>
 
