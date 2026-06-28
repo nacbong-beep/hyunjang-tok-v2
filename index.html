@@ -5399,6 +5399,7 @@ function _renderPersonalView(el) {
   const overdue = undone.filter(n => n.due_date && n.due_date < today);
   const dueToday = undone.filter(n => n.due_date === today);
   const dueWeek = undone.filter(n => n.due_date && n.due_date > today && n.due_date <= thisWeekEnd);
+  const dueFuture = undone.filter(n => n.due_date && n.due_date > thisWeekEnd);
   const noDue = undone.filter(n => !n.due_date);
 
   function noteCard(n) {
@@ -5458,6 +5459,7 @@ function _renderPersonalView(el) {
           : `${section('기한 지남', overdue, '#ef4444')}
              ${section('오늘', dueToday, '#f59e0b')}
              ${section('이번 주', dueWeek, 'var(--primary)')}
+             ${section('예정', dueFuture)}
              ${section('기한 없음', noDue)}
              ${done.length?`<div style="height:0.5px;background:var(--border2);margin:1rem 0"></div>${section('완료', done)}`:''}`
         }
