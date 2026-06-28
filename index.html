@@ -5115,7 +5115,7 @@ function openPersonalAddModal(editNote = null) {
       </div>
       <div style="margin-bottom:12px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">내용</div>
-        <textarea id="pn-memo" class="modal-input" style="width:100%;height:80px;resize:none" placeholder="내용을 입력하세요">${editNote?.memo||''}</textarea>
+        <textarea id="pn-memo" class="modal-input" style="width:100%;height:120px;resize:none" placeholder="내용을 입력하세요">${editNote?.memo||''}</textarea>
       </div>
       <div style="margin-bottom:16px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">기한 (선택)</div>
@@ -5181,19 +5181,19 @@ function renderPersonalView(el) {
     const isOverdue = n.due_date && n.due_date < today && !n.done;
     const dueTxt = n.due_date ? (isOverdue ? `⚠️ 기한 지남` : n.due_date) : '';
     return `
-      <div style="background:var(--card);border:0.5px solid var(--border2);border-radius:14px;padding:14px 16px;cursor:pointer;${n.done?'opacity:0.5':''}" onclick="openPersonalEditModal('${n.id}')">
+      <div style="background:var(--card);border:0.5px solid var(--border2);border-radius:14px;padding:16px;min-height:120px;display:flex;flex-direction:column;cursor:pointer;${n.done?'opacity:0.5':''}" onclick="openPersonalEditModal('${n.id}')">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
           <span style="font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;background:${catColor}22;color:${catColor}">${n.category}</span>
-          <div style="display:flex;align-items:center;gap:8px">
+          <div style="display:flex;align-items:center;gap:6px">
             ${dueTxt?`<span style="font-size:11px;color:${isOverdue?'#ef4444':'var(--muted)'};font-weight:${isOverdue?'600':'400'}">${dueTxt}</span>`:''}
-            <button onclick="event.stopPropagation();togglePersonalDone('${n.id}')" style="background:none;border:none;cursor:pointer;padding:0;width:18px;height:18px;border-radius:50%;border:1.5px solid ${n.done?catColor:'var(--border2)'};background:${n.done?catColor:'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              ${n.done?'<svg width="10" height="8" viewBox="0 0 10 8"><polyline points="1,4 4,7 9,1" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>':''}
+            <button onclick="event.stopPropagation();togglePersonalDone('${n.id}')" style="width:16px;height:16px;border-radius:50%;border:1.5px solid ${n.done?catColor:'var(--border2)'};background:${n.done?catColor:'transparent'};display:flex;align-items:center;justify-content:center;flex-shrink:0;cursor:pointer;padding:0">
+              ${n.done?'<svg width="8" height="6" viewBox="0 0 8 6"><polyline points="1,3 3,5 7,1" fill="none" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg>':''}
             </button>
-            <button onclick="event.stopPropagation();if(confirm('삭제할까요?')){deletePersonalNote('${n.id}').then(()=>renderPersonalView(document.getElementById('main-content')))}" style="background:none;border:none;color:var(--muted);font-size:13px;cursor:pointer;padding:0;line-height:1">✕</button>
+            <button onclick="event.stopPropagation();if(confirm('삭제할까요?')){deletePersonalNote('${n.id}').then(()=>renderPersonalView(document.getElementById('main-content')))}" style="background:none;border:none;color:var(--muted);font-size:12px;cursor:pointer;padding:0;line-height:1">✕</button>
           </div>
         </div>
-        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:4px;${n.done?'text-decoration:line-through':''}">${n.title}</div>
-        ${n.memo?`<div style="font-size:12px;color:var(--muted);line-height:1.5">${n.memo}</div>`:''}
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;${n.done?'text-decoration:line-through':''}">${n.title}</div>
+        ${n.memo?`<div style="font-size:12px;color:var(--muted);line-height:1.6;flex:1">${n.memo}</div>`:'<div style="flex:1"></div>'}
       </div>`;
   }
 
@@ -5204,7 +5204,7 @@ function renderPersonalView(el) {
         <div style="font-size:11px;font-weight:600;color:${color};margin-bottom:10px;display:flex;justify-content:space-between">
           <span>${label}</span><span>${notes.length}건</span>
         </div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px">
           ${notes.map(noteCard).join('')}
         </div>
       </div>`;
@@ -5212,7 +5212,7 @@ function renderPersonalView(el) {
 
   const isEmpty = personalNotes.length === 0;
   el.innerHTML = `
-    <div style="max-width:700px;margin:0 auto;padding:20px 16px">
+    <div style="padding:20px 16px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
         <div style="font-size:18px;font-weight:700;color:var(--text)">개인노트</div>
         <button class="btn-primary" onclick="openPersonalAddModal()" style="padding:7px 16px;font-size:13px">+ 추가</button>
