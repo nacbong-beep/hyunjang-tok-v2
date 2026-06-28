@@ -598,7 +598,7 @@ function setView(v) {
   else if(currentView==='drawing') renderLibraryView(el, 'drawing');
   else if(currentView==='construction') renderLibraryView(el, 'construction');
   else if(currentView==='inspection') renderInspectionView(el);
-  else if(currentView==='personal') renderPersonalView(el);
+  else if(currentView==='personal') { renderPersonalView(el); }
   else if(currentView==='settings') renderSettingsView(el);
   else if(currentView.startsWith('room_')) {
     renderRoomView(el,v);
@@ -5163,9 +5163,18 @@ async function confirmPersonalNote(editId) {
   renderPersonalView(document.getElementById('main-content'));
 }
 
-async function renderPersonalView(el) {
+function renderPersonalView(el) {
   if(!el) return;
-  if(personalNotes.length === 0) await loadPersonalNotes();
+  // 데이터 없으면 로드 후 재렌더
+  if(personalNotes.length === 0) {
+    loadPersonalNotes().then(() => _renderPersonalView(el));
+    return;
+  }
+  _renderPersonalView(el);
+}
+
+function _renderPersonalView(el) {
+  if(!el) return;
   const today = todayKey();
   const thisWeekEnd = (() => {
     const d = new Date();
@@ -5217,7 +5226,7 @@ async function renderPersonalView(el) {
 
   const isEmpty = personalNotes.length === 0;
   el.innerHTML = `
-    <div style="padding:20px 16px">
+    <div style="padding:12px 16px">
       <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
         <button class="btn-primary" onclick="openPersonalAddModal()" style="padding:7px 16px;font-size:13px">+ 추가</button>
       </div>
