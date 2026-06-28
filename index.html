@@ -5039,7 +5039,8 @@ let personalCatFilter = '전체';
 
 async function loadPersonalNotes() {
   const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
-  const userId = localStorage.getItem('hj_uid');
+  let userId = null;
+  try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
   if(!userId) return;
   try {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/personal_notes?user_id=eq.${userId}&order=created_at.desc`, {
@@ -5051,7 +5052,8 @@ async function loadPersonalNotes() {
 
 async function savePersonalNote(note) {
   const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
-  const userId = localStorage.getItem('hj_uid');
+  let userId = null;
+  try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
   const payload = { user_id: userId, title: note.title, memo: note.memo||'', category: note.category||'메모', due_date: note.due_date||null, done: false };
   const res = await fetch(`${SUPABASE_URL}/rest/v1/personal_notes`, {
     method: 'POST',
