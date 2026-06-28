@@ -5173,7 +5173,45 @@ async function confirmDeletePersonalEvent(id) {
   renderPersonalView(document.getElementById('main-content'));
 }
 
-function renderPersonalCalendar() {
+function drawPersonalRangeBars(y, mo) {
+  const gridId = 'p-cal-grid';
+  document.querySelectorAll(`#${gridId} .range-bar-item`).forEach(el => el.remove());
+  const rangeEvents = personalEvents.filter(e => e.end_date && e.end_date !== e.date);
+  if(!rangeEvents.length) return;
+
+  const monthStart = dateKey(new Date(y, mo, 1));
+  const monthEnd = dateKey(new Date(y, mo+1, 0));
+
+  rangeEvents.forEach(ev => {
+    const color = ev.color || '#3b82f6';
+    let cur = new Date(ev.date > monthStart ? ev.date : monthStart);
+    const endD = new Date(ev.end_date < monthEnd ? ev.end_date : monthEnd);
+    if(cur > endD) return;
+    while(cur <= endD) {
+      const dk = dateKey(cur);
+      const cell = document.querySelector(`#${gridId} [data-dk="${dk}"]`);
+      if(cell) {
+        const isStart = dk === ev.date;
+        const isEnd = dk === ev.end_date;
+        const dow = cur.getDay();
+        const isWeekStart = dow === 0;
+        const isWeekEnd = dow === 6;
+        const showLabel = isStart || isWeekStart;
+        const capLeft = isStart || isWeekStart;
+        const capRight = isEnd || isWeekEnd;
+        const bar = document.createElement('div');
+        bar.className = 'range-bar-item';
+        bar.style.cssText = `display:block;margin-top:2px;margin-bottom:1px;margin-left:-6px;margin-right:-7px;height:16px;background:${color}33;color:${color};font-size:10px;font-weight:700;border-radius:${capLeft?'4px':'0'} ${capRight?'4px':'0'} ${capRight?'4px':'0'} ${capLeft?'4px':'0'};padding:1px 6px;overflow:hidden;white-space:nowrap;cursor:pointer;line-height:14px;position:relative;z-index:5;`;
+        bar.textContent = showLabel ? ev.title : '';
+        bar.title = ev.title;
+        bar.onclick = e => { e.stopPropagation(); openPersonalEventModal(ev.date, ev.id); };
+        const ref = cell.querySelector('.cal-event, .cal-more');
+        cell.insertBefore(bar, ref);
+      }
+      cur.setDate(cur.getDate() + 1);
+    }
+  });
+}
   const y = pCalYear, mo = pCalMonth;
   const firstDay = new Date(y, mo, 1).getDay();
   const daysInMonth = new Date(y, mo+1, 0).getDate();
@@ -5198,7 +5236,7 @@ function renderPersonalCalendar() {
           </div>
           <button onclick="pCalNav(0)" style="height:28px;border:1px solid var(--border2);background:var(--card);border-radius:8px;font-size:12px;color:var(--muted);font-weight:700;cursor:pointer;padding:0 12px">오늘</button>
         </div>
-        <div class="calendar-grid">
+        <div class="calendar-grid" id="p-cal-grid">
           ${['일','월','화','수','목','금','토'].map(d=>`<div class="day-label">${d}</div>`).join('')}
           ${cells.map((date, i) => {
             if(!date) return '<div class="cal-cell" data-dk=""></div>';
@@ -5384,6 +5422,73 @@ function renderPersonalView(el) {
   _renderPersonalView(el);
 }
 
+function renderPersonalCalendar() {
+  const y = pCalYear, mo = pCalMonth;
+  const firstDay = new Date(y, mo, 1).getDay();
+  const daysInMonth = new Date(y, mo+1, 0).getDate();
+  const monthNames = ['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
+  const cells = [];
+  for(let i=0; i<firstDay; i++) cells.push(null);
+  for(let d=1; d<=daysInMonth; d++) cells.push(new Date(y, mo, d));
+
+  const upcomingEvs = personalEvents
+    .filter(e => e.date >= todayKey())
+    .sort((a,b) => a.date.localeCompare(b.date))
+    .slice(0, 5);
+
+  return `
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="calendar-card" style="border:none;padding:0;background:transparent">
+        <div class="calendar-head">
+          <div style="display:flex;align-items:center;gap:8px">
+            <button onclick="pCalNav(-1)" style="height:28px;min-width:28px;border:1px solid var(--border2);background:var(--card);border-radius:8px;font-size:14px;color:var(--muted);font-weight:700;cursor:pointer;padding:0 8px">‹</button>
+            <div class="calendar-title">${y}년 ${monthNames[mo]}</div>
+            <button onclick="pCalNav(1)" style="height:28px;min-width:28px;border:1px solid var(--border2);background:var(--card);border-radius:8px;font-size:14px;color:var(--muted);font-weight:700;cursor:pointer;padding:0 8px">›</button>
+          </div>
+          <button onclick="pCalNav(0)" style="height:28px;border:1px solid var(--border2);background:var(--card);border-radius:8px;font-size:12px;color:var(--muted);font-weight:700;cursor:pointer;padding:0 12px">오늘</button>
+        </div>
+        <div class="calendar-grid" id="p-cal-grid">
+          ${['일','월','화','수','목','금','토'].map(d=>`<div class="day-label">${d}</div>`).join('')}
+          ${cells.map((date, i) => {
+            if(!date) return '<div class="cal-cell" data-dk=""></div>';
+            const dk = dateKey(date);
+            const dayEvs = personalEvents.filter(e => e.date === dk || (e.end_date && e.date <= dk && e.end_date >= dk));
+            const isToday = isSameDay(date, new Date());
+            const isSun = i % 7 === 0;
+            const allDayCustom = getCustomEventsForDate(dk);
+            const isOffDay = allDayCustom.some(e => /^휴무/.test(e.title?.trim()));
+            const isWorkSat = allDayCustom.some(e => /^근무/.test(e.title?.trim())) && date.getDay() === 6;
+            const holiday = appSettings.showHoliday !== false ? getHoliday(y, mo, date.getDate()) : null;
+            return `<div class="cal-cell ${isToday?'today':''} ${isSun?'sunday':''} ${holiday?'holiday':''} ${isOffDay?'off-day':''} ${dayEvs.length&&!isOffDay?'has-custom':''}" data-dk="${dk}" onclick="openPersonalEventModal('${dk}')">
+              <div class="cal-date" style="${isOffDay?'color:#ef4444':''}">
+                <span>${date.getDate()}</span>
+                ${isOffDay?'<span style="font-size:11px;color:#ef4444;font-weight:900;margin-left:3px">휴무</span>':''}
+                ${isWorkSat?'<span style="font-size:11px;color:#0f766e;font-weight:900;margin-left:3px">근무</span>':''}
+                ${holiday?`<span class="holiday-name" style="display:inline;margin-left:3px">${holiday}</span>`:''}
+              </div>
+              ${dayEvs.filter(e=>!e.end_date||e.end_date===e.date).slice(0,3).map(e=>`<span class="cal-event custom-ev" onclick="event.stopPropagation();openPersonalEventModal('${dk}','${e.id}')" style="${e.color?'background:'+e.color+'22;color:'+e.color:''}">${e.title}</span>`).join('')}
+              ${dayEvs.filter(e=>!e.end_date||e.end_date===e.date).length>3?`<span class="cal-more">+${dayEvs.length-3}</span>`:''}
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="panel">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+          <div class="panel-title">다가오는 일정</div>
+          <button class="btn-primary" style="font-size:11px;padding:5px 10px" onclick="openPersonalEventModal('${todayKey()}')">+ 추가</button>
+        </div>
+        ${upcomingEvs.length ? upcomingEvs.map(e=>`
+          <div class="mini-schedule" style="cursor:pointer;border-left-color:${e.color||'#3b82f6'}" onclick="openPersonalEventModal('${e.date}','${e.id}')">
+            <div class="mini-date" style="color:${e.color||'#3b82f6'}">${formatDate(e.date)}${e.end_date?' ~ '+formatDate(e.end_date):''}</div>
+            <div class="mini-text">${e.title}</div>
+            ${e.memo?`<div class="meta">${e.memo}</div>`:''}
+          </div>`).join('')
+        : '<div class="empty-box">다가오는 일정이 없습니다.</div>'}
+      </div>
+    </div>
+  `;
+}
+
 function _renderPersonalView(el) {
   if(!el) return;
   const today = todayKey();
@@ -5471,6 +5576,7 @@ function _renderPersonalView(el) {
       }
     </style>
   `;
+  requestAnimationFrame(() => drawPersonalRangeBars(pCalYear, pCalMonth));
 }
 
 function openPersonalEditModal(id) {
