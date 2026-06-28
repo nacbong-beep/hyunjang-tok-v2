@@ -5212,6 +5212,8 @@ function drawPersonalRangeBars(y, mo) {
     }
   });
 }
+
+function renderPersonalCalendar() {
   const y = pCalYear, mo = pCalMonth;
   const firstDay = new Date(y, mo, 1).getDay();
   const daysInMonth = new Date(y, mo+1, 0).getDate();
