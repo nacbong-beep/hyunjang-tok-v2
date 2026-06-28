@@ -5418,7 +5418,7 @@ function _renderPersonalView(el) {
           </div>
         </div>
         <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;${n.done?'text-decoration:line-through':''}">${n.title}</div>
-        ${n.memo?`<div style="font-size:12px;color:var(--muted);line-height:1.6;flex:1">${n.memo}</div>`:'<div style="flex:1"></div>'}
+        ${n.memo?`<div style="font-size:12px;color:var(--muted);line-height:1.6;flex:1">${n.memo.replace(/\n/g,'<br>')}</div>`:'<div style="flex:1"></div>'}
       </div>`;
   }
 
