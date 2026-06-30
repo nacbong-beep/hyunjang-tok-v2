@@ -4498,7 +4498,7 @@ async function getLibraryThumbUrl(filePath) {
     console.warn('썸네일 signedURL 누락:', filePath, data);
     return null;
   }
-  const url = `${SUPABASE_URL}/storage/v1/render/image/sign${data.signedURL}`;
+  const url = `${SUPABASE_URL}/storage/v1${data.signedURL}`;
   libThumbUrlCache[filePath] = url;
   return url;
 }
