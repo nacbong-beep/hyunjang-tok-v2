@@ -4042,7 +4042,7 @@ function renderInspectionDetail(el) {
             <div class="drag-item" data-id="${item.id}" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px" id="iitem-${item.id}">
               <span class="drag-handle" style="font-size:18px;cursor:grab;color:var(--muted);padding:0 4px" title="드래그로 순서 변경">⠿</span>
               <div style="font-size:12px;font-weight:700;color:var(--muted);min-width:20px;text-align:center">${idx+1}</div>
-              ${doc ? `<img src="" data-path="${doc.file_path||''}" class="lib-thumb" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="openInspectionDocView('${doc.id}')" onerror="this.style.display='none'">` : '<div style="width:60px;height:60px;background:var(--surface);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px">📄</div>'}
+              ${doc ? `<img data-path="${doc.file_path||''}" class="lib-thumb" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="openInspectionDocView('${doc.id}')" onerror="if(this.dataset.loaded)this.style.display='none'">` : '<div style="width:60px;height:60px;background:var(--surface);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px">📄</div>'}
               <div style="flex:1;min-width:0">
                 <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${doc ? doc.title : '(삭제된 도면)'}</div>
                 <div style="font-size:11px;color:var(--muted);margin-top:2px">${doc ? (doc.category||'') : ''}</div>
@@ -4076,7 +4076,7 @@ function renderInspectionDetail(el) {
                   <div class="doc-check" style="width:22px;height:22px;border-radius:50%;border:2px solid #ccc;background:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;transition:all .15s"></div>
                 </div>
                 <div style="width:100%;height:140px;background:var(--surface);display:flex;align-items:center;justify-content:center;overflow:hidden">
-                  <img src="" data-path="${doc.file_path||''}" class="lib-thumb" style="width:100%;height:100%;object-fit:contain" onerror="this.parentElement.innerHTML='<span style=font-size:32px>📄</span>'">
+                  <img data-path="${doc.file_path||''}" class="lib-thumb" style="width:100%;height:100%;object-fit:contain" onerror="if(this.dataset.loaded)this.parentElement.innerHTML='<span style=font-size:32px>📄</span>'">
                 </div>
                 <div style="padding:8px 10px;border-top:1px solid var(--border)">
                   <div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${doc.title}</div>
@@ -4357,7 +4357,7 @@ async function renderLibraryView(el, storageType='library') {
                   onmouseout="this.style.transform='';this.style.boxShadow=''"
                   onclick="openLibraryDoc('${doc.id}')">
                   <div style="height:120px;background:var(--bg);display:flex;align-items:center;justify-content:center;position:relative">
-                    <img src="" data-path="${doc.file_path}" class="lib-thumb"
+                    <img data-path="${doc.file_path}" class="lib-thumb"
                       style="width:100%;height:100%;object-fit:cover">
                   </div>
                   <div style="padding:10px 12px">
@@ -4463,10 +4463,10 @@ function renderLibraryGrid(docs, storageType, searchQ='') {
         onmouseout="this.style.transform='';this.style.boxShadow=''"
         onclick="openLibraryDoc('${doc.id}')">
         <div style="height:120px;background:var(--bg);display:flex;align-items:center;justify-content:center;position:relative">
-          <img src="" data-path="${doc.file_path}" class="lib-thumb"
+          <img data-path="${doc.file_path}" class="lib-thumb"
             style="width:100%;height:100%;object-fit:cover"
             onload="this.style.display='block'"
-            onerror="this.style.display='none'">
+            onerror="if(this.dataset.loaded)this.style.display='none'">
         </div>
         <div style="padding:10px 12px">
           <div style="font-size:11px;color:var(--accent);font-weight:700;margin-bottom:3px">${catLabel}</div>
@@ -4539,45 +4539,33 @@ async function getLibraryThumbUrl(filePath) {
 }
 
 async function loadLibraryThumbs() {
-  const imgs = Array.from(document.querySelectorAll('.lib-thumb'));
+  const imgs = Array.from(document.querySelectorAll('.lib-thumb')).filter(img => !img.dataset.loaded);
   if(!imgs.length) return;
 
-  // 화면에 보이는 이미지만 로드 (스크롤 시 추가 로드) - egress 절약
   const loadOne = async (img) => {
     const path = img.dataset.path;
-    if(!path || img.dataset.loaded) return;
+    if(!path) return;
     img.dataset.loaded = '1';
     try {
       let url = await getLibraryThumbUrl(path);
-      if(!url) {
-        // transform 실패 시 원본 signed URL로 폴백 (egress는 늘지만 화면 깨짐보다 낫다)
-        url = await getLibraryFileUrl(path);
+      if(!url) url = await getLibraryFileUrl(path);
+      if(url) {
+        img.src = url;
+      } else {
+        console.warn('썸네일 URL 발급 실패 (둘 다 null):', path);
       }
-      if(url) img.src = url;
     } catch(e) {
-      console.warn('썸네일 로드 실패:', path, e);
+      console.warn('썸네일 로드 예외:', path, e);
     }
   };
 
-  if('IntersectionObserver' in window) {
-    const io = new IntersectionObserver((entries) => {
-      entries.forEach(entry => {
-        if(entry.isIntersecting) {
-          loadOne(entry.target);
-          io.unobserve(entry.target);
-        }
-      });
-    }, { rootMargin: '200px' }); // 화면에 들어오기 200px 전부터 미리 로드
-    imgs.forEach(img => io.observe(img));
-  } else {
-    // 폴백: IntersectionObserver 미지원 시 기존 동시 로드 방식
-    const concurrency = 6;
-    let idx = 0;
-    async function worker() {
-      while(idx < imgs.length) { await loadOne(imgs[idx++]); }
-    }
-    await Promise.all(Array.from({ length: concurrency }, worker));
+  // 동시 로드 방식으로 단순화 (IntersectionObserver는 컨테이너 구조에 따라 트리거 안 되는 경우가 있어 제거)
+  const concurrency = 6;
+  let idx = 0;
+  async function worker() {
+    while(idx < imgs.length) { await loadOne(imgs[idx++]); }
   }
+  await Promise.all(Array.from({ length: Math.min(concurrency, imgs.length) }, worker));
 }
 
 let libPendingFile = null;
