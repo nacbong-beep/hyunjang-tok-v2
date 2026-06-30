@@ -3642,18 +3642,61 @@ async function loadLibraryDocs(storageType='library') {
   } catch(e) { console.warn('library load error', e); }
 }
 
+// 클라이언트에서 이미지를 240x240 썸네일로 리사이즈 (Free 플랜 대응 - 서버 transform 없이 동작)
+function resizeImageToThumb(file, maxSize = 240, quality = 0.6) {
+  return new Promise((resolve, reject) => {
+    if(!file.type.startsWith('image/')) { resolve(null); return; }
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = e => { img.src = e.target.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      // cover 방식: 정사각형으로 크롭
+      const side = Math.min(img.width, img.height);
+      const sx = (img.width - side) / 2;
+      const sy = (img.height - side) / 2;
+      canvas.width = maxSize;
+      canvas.height = maxSize;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, sx, sy, side, side, 0, 0, maxSize, maxSize);
+      canvas.toBlob(blob => resolve(blob), 'image/jpeg', quality);
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 async function uploadLibraryFile(file, category, title, memo, storageType='library') {
   const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
   const ext = file.name.split('.').pop() || 'png';
-  const filePath = `${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+  const baseName = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const filePath = `${baseName}.${ext}`;
 
-  // Supabase Storage 업로드
+  // Supabase Storage 업로드 (원본)
   const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/library/${filePath}`, {
     method: 'POST',
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${token}`, 'Content-Type': file.type },
     body: file
   });
   if(!uploadRes.ok) throw new Error('업로드 실패');
+
+  // 썸네일 생성 후 별도 업로드 (Free 플랜에서도 작동 - 서버 transform 불필요)
+  let thumbPath = null;
+  try {
+    const thumbBlob = await resizeImageToThumb(file);
+    if(thumbBlob) {
+      thumbPath = `thumb_${baseName}.jpg`;
+      const thumbUploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/library/${thumbPath}`, {
+        method: 'POST',
+        headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${token}`, 'Content-Type': 'image/jpeg' },
+        body: thumbBlob
+      });
+      if(!thumbUploadRes.ok) thumbPath = null; // 썸네일 업로드 실패해도 원본 업로드는 유지
+    }
+  } catch(e) {
+    console.warn('썸네일 생성 실패, 원본만 저장:', e);
+  }
 
   // JWT에서 user_id 파싱
   let userId = null;
@@ -3669,7 +3712,7 @@ async function uploadLibraryFile(file, category, title, memo, storageType='libra
       'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json', 'Prefer': 'return=representation'
     },
-    body: JSON.stringify({ category, title, memo, file_path: filePath, file_name: file.name, user_id: userId, doc_type: storageType })
+    body: JSON.stringify({ category, title, memo, file_path: filePath, thumb_path: thumbPath, file_name: file.name, user_id: userId, doc_type: storageType })
   });
   if(!dbRes.ok) throw new Error('DB 저장 실패');
   return await dbRes.json();
@@ -4042,7 +4085,7 @@ function renderInspectionDetail(el) {
             <div class="drag-item" data-id="${item.id}" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px" id="iitem-${item.id}">
               <span class="drag-handle" style="font-size:18px;cursor:grab;color:var(--muted);padding:0 4px" title="드래그로 순서 변경">⠿</span>
               <div style="font-size:12px;font-weight:700;color:var(--muted);min-width:20px;text-align:center">${idx+1}</div>
-              ${doc ? `<img data-path="${doc.file_path||''}" class="lib-thumb" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="openInspectionDocView('${doc.id}')" onerror="if(this.dataset.loaded)this.style.display='none'">` : '<div style="width:60px;height:60px;background:var(--surface);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px">📄</div>'}
+              ${doc ? `<img data-path="${doc.file_path||''}" data-thumb-path="${doc.thumb_path||''}" class="lib-thumb" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="openInspectionDocView('${doc.id}')" onerror="if(this.dataset.loaded)this.style.display='none'">` : '<div style="width:60px;height:60px;background:var(--surface);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px">📄</div>'}
               <div style="flex:1;min-width:0">
                 <div style="font-size:13px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${doc ? doc.title : '(삭제된 도면)'}</div>
                 <div style="font-size:11px;color:var(--muted);margin-top:2px">${doc ? (doc.category||'') : ''}</div>
@@ -4076,7 +4119,7 @@ function renderInspectionDetail(el) {
                   <div class="doc-check" style="width:22px;height:22px;border-radius:50%;border:2px solid #ccc;background:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;transition:all .15s"></div>
                 </div>
                 <div style="width:100%;height:140px;background:var(--surface);display:flex;align-items:center;justify-content:center;overflow:hidden">
-                  <img data-path="${doc.file_path||''}" class="lib-thumb" style="width:100%;height:100%;object-fit:contain" onerror="if(this.dataset.loaded)this.parentElement.innerHTML='<span style=font-size:32px>📄</span>'">
+                  <img data-path="${doc.file_path||''}" data-thumb-path="${doc.thumb_path||''}" class="lib-thumb" style="width:100%;height:100%;object-fit:contain" onerror="if(this.dataset.loaded)this.parentElement.innerHTML='<span style=font-size:32px>📄</span>'">
                 </div>
                 <div style="padding:8px 10px;border-top:1px solid var(--border)">
                   <div style="font-size:12px;font-weight:700;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${doc.title}</div>
@@ -4357,7 +4400,7 @@ async function renderLibraryView(el, storageType='library') {
                   onmouseout="this.style.transform='';this.style.boxShadow=''"
                   onclick="openLibraryDoc('${doc.id}')">
                   <div style="height:120px;background:var(--bg);display:flex;align-items:center;justify-content:center;position:relative">
-                    <img data-path="${doc.file_path}" class="lib-thumb"
+                    <img data-path="${doc.file_path}" data-thumb-path="${doc.thumb_path||''}" class="lib-thumb"
                       style="width:100%;height:100%;object-fit:cover">
                   </div>
                   <div style="padding:10px 12px">
@@ -4463,7 +4506,7 @@ function renderLibraryGrid(docs, storageType, searchQ='') {
         onmouseout="this.style.transform='';this.style.boxShadow=''"
         onclick="openLibraryDoc('${doc.id}')">
         <div style="height:120px;background:var(--bg);display:flex;align-items:center;justify-content:center;position:relative">
-          <img data-path="${doc.file_path}" class="lib-thumb"
+          <img data-path="${doc.file_path}" data-thumb-path="${doc.thumb_path||''}" class="lib-thumb"
             style="width:100%;height:100%;object-fit:cover"
             onload="this.style.display='block'"
             onerror="if(this.dataset.loaded)this.style.display='none'">
@@ -4500,6 +4543,33 @@ function setThumbCacheStore(store) {
 }
 
 let libThumbUrlCache = {}; // file_path -> signed URL (메모리, localStorage의 빠른 1차 캐시)
+
+// 업로드 시 미리 생성해둔 작은 썸네일 파일의 signed URL 발급 (transform 불필요 - Free 플랜에서도 동작)
+async function getLibraryThumbFileUrl(thumbPath) {
+  if(libThumbUrlCache[thumbPath]) return libThumbUrlCache[thumbPath];
+
+  const store = getThumbCacheStore();
+  const cached = store[thumbPath];
+  if(cached && (Date.now() - cached.ts) < LIB_THUMB_CACHE_TTL) {
+    libThumbUrlCache[thumbPath] = cached.url;
+    return cached.url;
+  }
+
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  const res = await fetch(`${SUPABASE_URL}/storage/v1/object/sign/library/${thumbPath}`, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ expiresIn: LIB_THUMB_EXPIRES_IN })
+  });
+  if(!res.ok) return null;
+  const data = await res.json();
+  if(!data.signedURL) return null;
+  const url = `${SUPABASE_URL}/storage/v1${data.signedURL}`;
+  libThumbUrlCache[thumbPath] = url;
+  store[thumbPath] = { url, ts: Date.now() };
+  setThumbCacheStore(store);
+  return url;
+}
 
 async function getLibraryThumbUrl(filePath) {
   // 1차: 메모리 캐시
@@ -4546,15 +4616,24 @@ async function loadLibraryThumbs() {
 
   const loadOne = async (img) => {
     const path = img.dataset.path;
+    const thumbPath = img.dataset.thumbPath;
     if(!path || img.dataset.loaded) return;
     img.dataset.loaded = '1';
     try {
-      let url = await getLibraryThumbUrl(path);
+      let url;
+      if(thumbPath) {
+        // 업로드 시 미리 만들어둔 작은 썸네일 파일 사용 (Free 플랜에서도 동작, transform 불필요)
+        url = await getLibraryThumbFileUrl(thumbPath);
+      }
+      if(!url) {
+        // 구버전 도면(썸네일 없음) - 서버 transform 시도 (Pro 플랜에서만 동작)
+        url = await getLibraryThumbUrl(path);
+      }
       if(!url) url = await getLibraryFileUrl(path);
       if(url) {
         img.src = url;
       } else {
-        console.warn('썸네일 URL 발급 실패 (둘 다 null):', path);
+        console.warn('썸네일 URL 발급 실패 (전부 null):', path);
       }
     } catch(e) {
       console.warn('썸네일 로드 예외:', path, e);
@@ -5377,6 +5456,8 @@ let personalNotes = [];
 const PERSONAL_CATS_DEFAULT = ['투자기록','쇼핑목록','할일','약속','메모'];
 const PERSONAL_CAT_COLORS = {투자기록:'#10b981',쇼핑목록:'#f59e0b',할일:'#3b82f6',약속:'#8b5cf6',메모:'#6b7280'};
 let personalCatFilter = '전체';
+let pendingPersonalImageFile = null;
+let pendingPersonalImageRemoved = false;
 
 function getPersonalCats() {
   return appSettings.personalCategories || PERSONAL_CATS_DEFAULT;
@@ -5395,11 +5476,34 @@ async function loadPersonalNotes() {
   } catch(e) { console.warn('personal notes load error', e); }
 }
 
+// 개인노트 이미지 업로드 (원본 + 작은 썸네일 함께 저장 - Free 플랜에서도 동작)
+async function uploadPersonalNoteImage(file) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  const ext = file.name.split('.').pop() || 'png';
+  const baseName = `pn_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const filePath = `${baseName}.${ext}`;
+
+  const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/library/${filePath}`, {
+    method: 'POST',
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${token}`, 'Content-Type': file.type },
+    body: file
+  });
+  if(!uploadRes.ok) throw new Error('이미지 업로드 실패');
+
+  return filePath;
+}
+
+async function getPersonalNoteImageUrl(filePath) {
+  let url = await getLibraryThumbUrl(filePath); // Pro 플랜: 서버 transform 축소본
+  if(!url) url = await getLibraryFileUrl(filePath); // 폴백: 원본
+  return url;
+}
+
 async function savePersonalNote(note) {
   const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
   let userId = null;
   try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
-  const payload = { user_id: userId, title: note.title, memo: note.memo||'', category: note.category||'메모', due_date: note.due_date||null, done: false };
+  const payload = { user_id: userId, title: note.title, memo: note.memo||'', category: note.category||'메모', due_date: note.due_date||null, image_path: note.image_path||null, done: false };
   const res = await fetch(`${SUPABASE_URL}/rest/v1/personal_notes`, {
     method: 'POST',
     headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
@@ -5438,6 +5542,8 @@ async function togglePersonalDone(id) {
 function openPersonalAddModal(editNote = null) {
   const existing = document.getElementById('personal-add-modal');
   if(existing) existing.remove();
+  pendingPersonalImageFile = null;
+  pendingPersonalImageRemoved = false;
   const selectedCat = editNote?.category || '메모';
   const modal = document.createElement('div');
   modal.id = 'personal-add-modal';
@@ -5461,6 +5567,20 @@ function openPersonalAddModal(editNote = null) {
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">내용</div>
         <textarea id="pn-memo" class="modal-input" style="width:100%;height:120px;resize:none" placeholder="내용을 입력하세요">${editNote?.memo||''}</textarea>
       </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">이미지 (선택)</div>
+        <input type="file" id="pn-image-input" accept="image/*" style="display:none" onchange="handlePersonalImageSelect(event)">
+        <div id="pn-image-preview-wrap">
+          ${editNote?.image_path ? `
+            <div style="position:relative;display:inline-block">
+              <img id="pn-image-preview" src="" data-thumb-path="${editNote.image_path}" class="lib-thumb" style="max-width:100%;max-height:160px;border-radius:8px;border:1px solid var(--border2);display:block">
+              <button onclick="removePersonalImage()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:13px">✕</button>
+            </div>
+          ` : `
+            <button class="btn-ghost" style="width:100%;padding:10px" onclick="document.getElementById('pn-image-input').click()">📷 이미지 선택</button>
+          `}
+        </div>
+      </div>
       <div style="margin-bottom:16px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">기한 (선택)</div>
         <input id="pn-due" type="date" class="modal-input" value="${editNote?.due_date||''}" style="width:100%">
@@ -5482,6 +5602,43 @@ function openPersonalAddModal(editNote = null) {
   modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
   document.body.appendChild(modal);
   setTimeout(() => document.getElementById('pn-title')?.focus(), 50);
+
+  // 수정 모드에서 기존 이미지 미리보기 로드
+  if(editNote?.image_path) {
+    getPersonalNoteImageUrl(editNote.image_path).then(url => {
+      const img = document.getElementById('pn-image-preview');
+      if(img && url) img.src = url;
+    });
+  }
+}
+
+function handlePersonalImageSelect(e) {
+  const file = e.target.files?.[0];
+  if(!file) return;
+  pendingPersonalImageFile = file;
+  pendingPersonalImageRemoved = false;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const wrap = document.getElementById('pn-image-preview-wrap');
+    if(wrap) {
+      wrap.innerHTML = `
+        <div style="position:relative;display:inline-block">
+          <img src="${ev.target.result}" style="max-width:100%;max-height:160px;border-radius:8px;border:1px solid var(--border2);display:block">
+          <button onclick="removePersonalImage()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:13px">✕</button>
+        </div>
+      `;
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function removePersonalImage() {
+  pendingPersonalImageFile = null;
+  pendingPersonalImageRemoved = true;
+  const wrap = document.getElementById('pn-image-preview-wrap');
+  if(wrap) {
+    wrap.innerHTML = `<button class="btn-ghost" style="width:100%;padding:10px" onclick="document.getElementById('pn-image-input').click()">📷 이미지 선택</button>`;
+  }
 }
 
 async function confirmPersonalNote(editId) {
@@ -5492,15 +5649,33 @@ async function confirmPersonalNote(editId) {
   const catBtn = modal?.querySelector('.pn-cat-btn[style*="var(--primary)"]');
   const category = catBtn?.dataset.cat || '메모';
   if(!title) { showToast('제목을 입력해주세요.'); return; }
-  if(editId) {
-    await updatePersonalNote(editId, { title, memo, due_date: due||null, category });
-    showToast('✅ 수정됐어요.');
-  } else {
-    await savePersonalNote({ title, memo, due_date: due||null, category });
-    showToast('✅ 추가됐어요.');
+
+  const saveBtn = modal?.querySelector('.btn-primary');
+  if(saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '저장 중...'; }
+
+  try {
+    let imagePath = undefined; // undefined면 patch에서 제외 (기존 이미지 유지)
+    if(pendingPersonalImageFile) {
+      imagePath = await uploadPersonalNoteImage(pendingPersonalImageFile);
+    } else if(pendingPersonalImageRemoved) {
+      imagePath = null;
+    }
+
+    if(editId) {
+      const patch = { title, memo, due_date: due||null, category };
+      if(imagePath !== undefined) patch.image_path = imagePath;
+      await updatePersonalNote(editId, patch);
+      showToast('✅ 수정됐어요.');
+    } else {
+      await savePersonalNote({ title, memo, due_date: due||null, category, image_path: imagePath || null });
+      showToast('✅ 추가됐어요.');
+    }
+    modal?.remove();
+    renderPersonalView(document.getElementById('main-content'));
+  } catch(e) {
+    showToast('저장에 실패했어요: ' + e.message);
+    if(saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '저장'; }
   }
-  modal?.remove();
-  renderPersonalView(document.getElementById('main-content'));
 }
 
 function renderPersonalView(el) {
@@ -5618,6 +5793,7 @@ function _renderPersonalView(el) {
           </div>
         </div>
         <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;${n.done?'text-decoration:line-through':''}">${n.title}</div>
+        ${n.image_path ? `<img data-path="${n.image_path}" class="lib-thumb" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-bottom:8px;background:var(--surface)" onerror="if(this.dataset.loaded)this.style.display='none'">` : ''}
         ${n.memo?`<div style="font-size:12px;color:var(--muted);line-height:1.6;flex:1">${n.memo.replace(/\n/g,'<br>')}</div>`:'<div style="flex:1"></div>'}
       </div>`;
   }
@@ -5671,6 +5847,7 @@ function _renderPersonalView(el) {
     </style>
   `;
   requestAnimationFrame(() => drawPersonalRangeBars(pCalYear, pCalMonth));
+  loadLibraryThumbs();
 }
 
 function openPersonalEditModal(id) {
