@@ -5577,7 +5577,10 @@ function openPersonalAddModal(editNote = null) {
               <button onclick="removePersonalImage()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:13px">✕</button>
             </div>
           ` : `
-            <button class="btn-ghost" style="width:100%;padding:10px" onclick="document.getElementById('pn-image-input').click()">📷 이미지 선택</button>
+            <div style="display:flex;gap:6px">
+              <button class="btn-ghost" style="flex:1;padding:10px;font-size:12px" onclick="document.getElementById('pn-image-input').click()">📷 이미지 선택</button>
+              <button class="btn-ghost" style="flex:1;padding:10px;font-size:12px" onclick="pastePersonalImage()">📋 붙여넣기</button>
+            </div>
           `}
         </div>
       </div>
@@ -5600,6 +5603,33 @@ function openPersonalAddModal(editNote = null) {
     });
   });
   modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+  modal.addEventListener('paste', e => {
+    const items = e.clipboardData?.items;
+    if(!items) return;
+    for(const item of items) {
+      if(item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if(!file) continue;
+        pendingPersonalImageFile = file;
+        pendingPersonalImageRemoved = false;
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const wrap = document.getElementById('pn-image-preview-wrap');
+          if(wrap) {
+            wrap.innerHTML = `
+              <div style="position:relative;display:inline-block">
+                <img src="${ev.target.result}" style="max-width:100%;max-height:160px;border-radius:8px;border:1px solid var(--border2);display:block">
+                <button onclick="removePersonalImage()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:13px">✕</button>
+              </div>
+            `;
+          }
+        };
+        reader.readAsDataURL(file);
+        showToast('📋 이미지를 붙여넣었어요');
+        break;
+      }
+    }
+  });
   document.body.appendChild(modal);
   setTimeout(() => document.getElementById('pn-title')?.focus(), 50);
 
@@ -5609,6 +5639,40 @@ function openPersonalAddModal(editNote = null) {
       const img = document.getElementById('pn-image-preview');
       if(img && url) img.src = url;
     });
+  }
+}
+
+async function pastePersonalImage() {
+  try {
+    const items = await navigator.clipboard.read();
+    for(const item of items) {
+      for(const type of item.types) {
+        if(type.startsWith('image/')) {
+          const blob = await item.getType(type);
+          const file = new File([blob], `paste_${Date.now()}.png`, { type });
+          pendingPersonalImageFile = file;
+          pendingPersonalImageRemoved = false;
+          const reader = new FileReader();
+          reader.onload = ev => {
+            const wrap = document.getElementById('pn-image-preview-wrap');
+            if(wrap) {
+              wrap.innerHTML = `
+                <div style="position:relative;display:inline-block">
+                  <img src="${ev.target.result}" style="max-width:100%;max-height:160px;border-radius:8px;border:1px solid var(--border2);display:block">
+                  <button onclick="removePersonalImage()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:13px">✕</button>
+                </div>
+              `;
+            }
+          };
+          reader.readAsDataURL(file);
+          showToast('📋 이미지를 붙여넣었어요');
+          return;
+        }
+      }
+    }
+    showToast('클립보드에 이미지가 없어요. 캡처 후 다시 시도해주세요.');
+  } catch(e) {
+    showToast('붙여넣기 권한이 필요해요. 브라우저에서 허용해주세요.');
   }
 }
 
