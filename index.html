@@ -4538,13 +4538,15 @@ async function getLibraryThumbUrl(filePath) {
   return url;
 }
 
+let libThumbObserver = null;
+
 async function loadLibraryThumbs() {
-  const imgs = Array.from(document.querySelectorAll('.lib-thumb')).filter(img => !img.dataset.loaded);
+  const imgs = Array.from(document.querySelectorAll('.lib-thumb')).filter(img => !img.dataset.loaded && !img.dataset.observed);
   if(!imgs.length) return;
 
   const loadOne = async (img) => {
     const path = img.dataset.path;
-    if(!path) return;
+    if(!path || img.dataset.loaded) return;
     img.dataset.loaded = '1';
     try {
       let url = await getLibraryThumbUrl(path);
@@ -4559,13 +4561,30 @@ async function loadLibraryThumbs() {
     }
   };
 
-  // 동시 로드 방식으로 단순화 (IntersectionObserver는 컨테이너 구조에 따라 트리거 안 되는 경우가 있어 제거)
-  const concurrency = 6;
-  let idx = 0;
-  async function worker() {
-    while(idx < imgs.length) { await loadOne(imgs[idx++]); }
+  if('IntersectionObserver' in window) {
+    if(!libThumbObserver) {
+      libThumbObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if(entry.isIntersecting) {
+            loadOne(entry.target);
+            libThumbObserver.unobserve(entry.target);
+          }
+        });
+      }, { rootMargin: '300px' }); // 화면에 들어오기 300px 전부터 미리 로드 (스크롤 시 끊김 없이)
+    }
+    imgs.forEach(img => {
+      img.dataset.observed = '1';
+      libThumbObserver.observe(img);
+    });
+  } else {
+    // 폴백: IntersectionObserver 미지원 시 동시 로드
+    const concurrency = 6;
+    let idx = 0;
+    async function worker() {
+      while(idx < imgs.length) { await loadOne(imgs[idx++]); }
+    }
+    await Promise.all(Array.from({ length: Math.min(concurrency, imgs.length) }, worker));
   }
-  await Promise.all(Array.from({ length: Math.min(concurrency, imgs.length) }, worker));
 }
 
 let libPendingFile = null;
