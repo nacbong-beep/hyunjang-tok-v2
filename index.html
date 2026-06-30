@@ -4489,8 +4489,15 @@ async function getLibraryThumbUrl(filePath) {
     headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ expiresIn: 3600, transform: { width: 240, height: 240, resize: 'cover', quality: 60 } })
   });
-  if(!res.ok) return null;
+  if(!res.ok) {
+    console.warn('썸네일 signed URL 발급 실패:', filePath, res.status, await res.text().catch(()=>''));
+    return null;
+  }
   const data = await res.json();
+  if(!data.signedURL) {
+    console.warn('썸네일 signedURL 누락:', filePath, data);
+    return null;
+  }
   const url = `${SUPABASE_URL}/storage/v1/render/image/sign${data.signedURL}`;
   libThumbUrlCache[filePath] = url;
   return url;
@@ -4506,7 +4513,11 @@ async function loadLibraryThumbs() {
     if(!path || img.dataset.loaded) return;
     img.dataset.loaded = '1';
     try {
-      const url = await getLibraryThumbUrl(path);
+      let url = await getLibraryThumbUrl(path);
+      if(!url) {
+        // transform 실패 시 원본 signed URL로 폴백 (egress는 늘지만 화면 깨짐보다 낫다)
+        url = await getLibraryFileUrl(path);
+      }
       if(url) img.src = url;
     } catch(e) {
       console.warn('썸네일 로드 실패:', path, e);
