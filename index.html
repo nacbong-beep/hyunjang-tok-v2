@@ -4228,7 +4228,7 @@ async function printInspectionFolder(folderId) {
 
   const printWin = window.open('', '_blank');
   const pageStyles = validItems.map((item,i) => {
-    const size = item.paper_size || 'A4 portrait';
+    const size = item.paper_size || 'A4 landscape';
     return `@page p${i}{size:${size};margin:5mm;}.pg${i}{page:p${i};}`;
   }).join('');
 
