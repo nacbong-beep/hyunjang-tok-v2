@@ -5857,7 +5857,7 @@ function _renderPersonalView(el) {
           </div>
         </div>
         <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;${n.done?'text-decoration:line-through':''}">${n.title}</div>
-        ${n.image_path ? `<img data-path="${n.image_path}" class="lib-thumb" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-bottom:8px;background:var(--surface)" onerror="if(this.dataset.loaded)this.style.display='none'">` : ''}
+        ${n.image_path ? `<img data-path="${n.image_path}" class="lib-thumb" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-bottom:8px;background:var(--surface);cursor:zoom-in" onclick="event.stopPropagation();openPersonalImageViewer('${n.image_path}')" onerror="if(this.dataset.loaded)this.style.display='none'">` : ''}
         ${n.memo?`<div style="font-size:12px;color:var(--muted);line-height:1.6;flex:1">${n.memo.replace(/\n/g,'<br>')}</div>`:'<div style="flex:1"></div>'}
       </div>`;
   }
@@ -5912,6 +5912,28 @@ function _renderPersonalView(el) {
   `;
   requestAnimationFrame(() => drawPersonalRangeBars(pCalYear, pCalMonth));
   loadLibraryThumbs();
+}
+
+async function openPersonalImageViewer(imagePath) {
+  const existing = document.getElementById('personal-image-viewer');
+  if(existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'personal-image-viewer';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:4000;display:flex;align-items:center;justify-content:center;padding:20px;cursor:zoom-out';
+  modal.innerHTML = `
+    <div style="position:relative;max-width:100%;max-height:100%">
+      <img id="personal-image-viewer-img" src="" style="max-width:90vw;max-height:90vh;border-radius:8px;display:block;background:#222">
+      <button onclick="document.getElementById('personal-image-viewer').remove()" style="position:absolute;top:-12px;right:-12px;background:#fff;color:#1a2332;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:16px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.3)">✕</button>
+    </div>
+  `;
+  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+
+  const url = await getLibraryFileUrl(imagePath); // 원본 화질
+  const img = document.getElementById('personal-image-viewer-img');
+  if(img && url) img.src = url;
+  else if(img) img.alt = '이미지를 불러오지 못했어요';
 }
 
 function openPersonalEditModal(id) {
