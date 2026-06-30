@@ -5966,6 +5966,82 @@ async function deletePersonalCat(cat) {
   showToast(`✅ "${cat}" 카테고리가 삭제됐어요.`);
 }
 
+// ===== 기존 도면 썸네일 일괄 생성 =====
+async function startThumbMigration() {
+  const statusEl = document.getElementById('thumb-migration-status');
+  const progressWrap = document.getElementById('thumb-migration-progress-wrap');
+  const bar = document.getElementById('thumb-migration-bar');
+  const label = document.getElementById('thumb-migration-label');
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+
+  statusEl.textContent = '대상 도면 확인 중...';
+  progressWrap.style.display = 'block';
+
+  // thumb_path 없는 도면 전체 조회
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/library_docs?thumb_path=is.null&select=id,file_path,doc_type`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+  });
+  if(!res.ok) { statusEl.textContent = '대상 조회 실패'; return; }
+  const targets = await res.json();
+
+  if(targets.length === 0) {
+    statusEl.textContent = '✅ 모든 도면에 이미 썸네일이 있어요.';
+    progressWrap.style.display = 'none';
+    return;
+  }
+
+  statusEl.textContent = `${targets.length}장 처리 중...`;
+  let done = 0, failed = 0;
+
+  for(const doc of targets) {
+    try {
+      // 1. 원본 이미지 다운로드
+      const fileUrl = await getLibraryFileUrl(doc.file_path);
+      if(!fileUrl) { failed++; continue; }
+      const imgRes = await fetch(fileUrl);
+      if(!imgRes.ok) { failed++; continue; }
+      const blob = await imgRes.blob();
+      const file = new File([blob], doc.file_path, { type: blob.type || 'image/png' });
+
+      // 2. 클라이언트에서 240x240 리사이즈
+      const thumbBlob = await resizeImageToThumb(file);
+      if(!thumbBlob) { failed++; continue; }
+
+      // 3. 썸네일 업로드
+      const thumbPath = `thumb_${doc.file_path.replace(/\.[^.]+$/, '')}.jpg`;
+      const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/library/${thumbPath}`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'image/jpeg' },
+        body: thumbBlob
+      });
+      if(!uploadRes.ok) { failed++; continue; }
+
+      // 4. DB 업데이트
+      await fetch(`${SUPABASE_URL}/rest/v1/library_docs?id=eq.${doc.id}`, {
+        method: 'PATCH',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thumb_path: thumbPath })
+      });
+
+      done++;
+    } catch(e) {
+      console.warn('썸네일 마이그레이션 실패:', doc.file_path, e);
+      failed++;
+    }
+
+    const progress = Math.round(((done + failed) / targets.length) * 100);
+    bar.style.width = progress + '%';
+    label.textContent = `${done + failed} / ${targets.length} 처리됨 (성공 ${done}, 실패 ${failed})`;
+  }
+
+  statusEl.textContent = `✅ 완료! 성공 ${done}장, 실패 ${failed}장`;
+  if(failed > 0) statusEl.textContent += ' (실패한 도면은 원본으로 표시돼요)';
+
+  // 캐시 초기화해서 새 썸네일이 바로 반영되도록
+  libThumbUrlCache = {};
+  localStorage.removeItem(LIB_THUMB_CACHE_KEY);
+}
+
 function renderSettingsView(el) {
   el.innerHTML = `
     <div style="max-width:640px;display:flex;flex-direction:column;gap:16px">
@@ -6000,6 +6076,20 @@ function renderSettingsView(el) {
             <div id="gemini-models-result" style="margin-top:8px;font-size:11px;color:var(--muted);max-height:150px;overflow-y:auto"></div>
           </div>
           <div style="font-size:11px;color:var(--muted)">현재: ${aiEngine==='claude'?'Claude Haiku (AI 분류 + AI 검색)':'Gemini Flash (AI 분류 + AI 검색)'}</div>
+        </div>
+      </div>
+
+      <!-- 기존 도면 썸네일 생성 -->
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">🖼️ 기존 도면 썸네일 생성</div></div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">Image Transformation 없이도 작은 용량 썸네일을 표시하기 위해, 기존 도면들의 작은 썸네일 파일을 미리 만들어둬요. 한 번만 실행하면 됩니다.</div>
+        <button class="btn-primary" style="width:100%" onclick="startThumbMigration()">▶ 썸네일 일괄 생성 시작</button>
+        <div id="thumb-migration-status" style="font-size:12px;color:var(--muted);margin-top:10px"></div>
+        <div id="thumb-migration-progress-wrap" style="display:none;margin-top:8px">
+          <div style="background:var(--surface);border-radius:8px;height:8px;overflow:hidden;margin-bottom:6px">
+            <div id="thumb-migration-bar" style="background:var(--primary);height:100%;width:0%;transition:width .15s"></div>
+          </div>
+          <div id="thumb-migration-label" style="font-size:11px;color:var(--muted)"></div>
         </div>
       </div>
 
