@@ -2929,22 +2929,22 @@ function searchWeeklyAll(q) {
   const el = document.getElementById('weekly-search-results');
   if(!q.trim()) { el.innerHTML = ''; return; }
 
-  const rows = ['작업사항','검측사항','확인사항','서류사항','기타'];
+  // 스페이스로 분리해서 AND 검색 (예: "302동 단열" → 302동 AND 단열 모두 포함)
+  const keywords = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const results = [];
 
-  // weeklyData 전체 순회
   Object.keys(weeklyData).sort((a,b)=>b.localeCompare(a)).forEach(wk => {
     const weekEntries = weeklyData[wk];
     Object.keys(weekEntries).forEach(key => {
       const val = weekEntries[key];
-      if(!val || !val.toLowerCase().includes(q.toLowerCase())) return;
+      if(!val) return;
+      const valLower = val.toLowerCase();
+      if(!keywords.every(kw => valLower.includes(kw))) return;
       const [row, dateKey] = key.split(':');
-      const d = new Date(dateKey);
+      const d = new Date(dateKey + 'T00:00:00+09:00');
       const days = ['일','월','화','수','목','금','토'];
       const dateLabel = `${d.getMonth()+1}/${d.getDate()}(${days[d.getDay()]})`;
-      // wk는 해당 주 월요일 날짜
-      const monD = new Date(wk);
-      const satD = new Date(wk); satD.setDate(monD.getDate()+5);
+      const monD = new Date(wk + 'T00:00:00+09:00');
       const weekLabel = `${monD.getFullYear()}년 ${monD.getMonth()+1}월 ${monD.getDate()}일 주`;
       results.push({wk, weekLabel, row, dateKey, dateLabel, val});
     });
@@ -2958,10 +2958,13 @@ function searchWeeklyAll(q) {
   el.innerHTML = `
     <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">${results.length}건 검색됨</div>
     ${results.map(r => {
-      const highlighted = r.val.replace(
-        new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),
-        match => `<mark style="background:#fef08a;color:#1a2332;border-radius:2px;padding:0 2px">${match}</mark>`
-      );
+      let highlighted = r.val;
+      keywords.forEach(kw => {
+        highlighted = highlighted.replace(
+          new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),
+          match => `<mark style="background:#fef08a;color:#1a2332;border-radius:2px;padding:0 2px">${match}</mark>`
+        );
+      });
       return `<div class="item" style="cursor:pointer;margin-bottom:8px" onclick="goToWeek('${r.wk}')">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
           <span class="badge b-blue">${r.row}</span>
