@@ -520,11 +520,12 @@ function renderSidebar() {
     drawing: {icon:'📐', label:'도면 관리'},
     construction: {icon:'🏗️', label:'시공 관리'},
     inspection: {icon:'📋', label:'검측요청서'},
+    punch: {icon:'📌', label:'펀치리스트'},
     todo: {icon:'✅', label:'할일', count: pending},
     personal: {icon:'📒', label:'개인노트'},
     settings: {icon:'⚙️', label:'설정'},
   };
-  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','todo','personal','settings'];
+  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','punch','todo','personal','settings'];
   const menuOrder = (appSettings.menuOrder && appSettings.menuOrder.length === defaultOrder.length)
     ? appSettings.menuOrder
     : defaultOrder;
@@ -581,7 +582,7 @@ function setView(v) {
   currentView = v;
   closeSidebar();
   if(v.startsWith('cat_')) { selectedCategory=v.replace('cat_',''); currentView='search'; }
-  const titles = {dashboard:'대시보드',calendar:'캘린더',weekly:'주간업무일지',library:'공정표 관리',drawing:'도면 관리',construction:'시공 관리',inspection:'검측요청서',todo:'할일',personal:'개인노트',search:'검색',ai_search:'AI 검색',input:'메시지 입력',settings:'설정'};
+  const titles = {dashboard:'대시보드',calendar:'캘린더',weekly:'주간업무일지',library:'공정표 관리',drawing:'도면 관리',construction:'시공 관리',inspection:'검측요청서',punch:'펀치리스트',todo:'할일',personal:'개인노트',search:'검색',ai_search:'AI 검색',input:'메시지 입력',settings:'설정'};
   document.getElementById('header-title').textContent = titles[v]||(v.startsWith('cat_')?v.replace('cat_','')+'  검색':v);
   const guideEl = document.getElementById('header-guide');
   if(guideEl) guideEl.style.display = (currentView==='dashboard') ? 'block' : 'none';
@@ -599,6 +600,7 @@ function setView(v) {
   else if(currentView==='construction') renderLibraryView(el, 'construction');
   else if(currentView==='inspection') renderInspectionView(el);
   else if(currentView==='personal') { renderPersonalView(el); }
+  else if(currentView==='punch') renderPunchView(el);
   else if(currentView==='settings') renderSettingsView(el);
   else if(currentView.startsWith('room_')) {
     renderRoomView(el,v);
@@ -5454,7 +5456,368 @@ function renderPersonalCalendar() {
   `;
 }
 
-// ===== 개인노트 =====
+// ===== 펀치리스트 =====
+let punchItems = [];
+let punchFilter = '전체';
+let punchCatFilter = '전체';
+let punchLocationFilter = '전체';
+let pendingPunchImageFile = null;
+const PUNCH_CATS = ['도배','바닥','창호','설비','목공','기타'];
+
+async function loadPunchItems() {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  let userId = null;
+  try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
+  if(!userId) return;
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/punch_items?user_id=eq.${userId}&order=created_at.desc`, {
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+    });
+    if(res.ok) punchItems = await res.json();
+  } catch(e) { console.warn('punch load error', e); }
+}
+
+async function savePunchItem(item) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  let userId = null;
+  try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/punch_items`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ user_id: userId, ...item })
+  });
+  if(res.ok) { const rows = await res.json(); punchItems.unshift(rows[0]); }
+}
+
+async function updatePunchItem(id, patch) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  await fetch(`${SUPABASE_URL}/rest/v1/punch_items?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch)
+  });
+  punchItems = punchItems.map(p => p.id === id ? {...p, ...patch} : p);
+}
+
+async function deletePunchItem(id) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  await fetch(`${SUPABASE_URL}/rest/v1/punch_items?id=eq.${id}`, {
+    method: 'DELETE',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+  });
+  punchItems = punchItems.filter(p => p.id !== id);
+}
+
+async function togglePunchStatus(id) {
+  const item = punchItems.find(p => p.id === id);
+  if(!item) return;
+  const done = item.status !== '조치완료';
+  await updatePunchItem(id, { status: done ? '조치완료' : '미조치', completed_at: done ? new Date().toISOString() : null });
+  renderPunchView(document.getElementById('main-content'));
+}
+
+async function uploadPunchImage(file) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  const baseName = `punch_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const filePath = `${baseName}.jpg`;
+  const thumbPath = `thumb_${baseName}.jpg`;
+
+  // 원본 업로드
+  const uploadRes = await fetch(`${SUPABASE_URL}/storage/v1/object/library/${filePath}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': file.type },
+    body: file
+  });
+  if(!uploadRes.ok) throw new Error('이미지 업로드 실패');
+
+  // 썸네일 생성 및 업로드
+  let finalThumbPath = null;
+  try {
+    const thumbBlob = await resizeImageToThumb(file);
+    if(thumbBlob) {
+      const thumbRes = await fetch(`${SUPABASE_URL}/storage/v1/object/library/${thumbPath}`, {
+        method: 'POST',
+        headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'image/jpeg' },
+        body: thumbBlob
+      });
+      if(thumbRes.ok) finalThumbPath = thumbPath;
+    }
+  } catch(e) { console.warn('썸네일 생성 실패:', e); }
+
+  return { filePath, thumbPath: finalThumbPath };
+}
+
+function openPunchAddModal(editItem = null) {
+  const existing = document.getElementById('punch-add-modal');
+  if(existing) existing.remove();
+  pendingPunchImageFile = null;
+
+  const modal = document.createElement('div');
+  modal.id = 'punch-add-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:440px;padding:20px;max-height:90vh;overflow-y:auto">
+      <div style="font-size:15px;font-weight:700;margin-bottom:16px">${editItem ? '펀치리스트 수정' : '펀치리스트 추가'}</div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">사진 *</div>
+        <input type="file" id="punch-image-input" accept="image/*" style="display:none" onchange="handlePunchImageSelect(event)">
+        <div id="punch-image-preview-wrap">
+          ${editItem?.image_path ? `
+            <div style="position:relative;display:inline-block;width:100%">
+              <img data-path="${editItem.thumb_path||editItem.image_path}" class="lib-thumb" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;border:1px solid var(--border2)">
+              <button onclick="removePunchImage()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:13px">✕</button>
+            </div>
+          ` : `
+            <div style="display:flex;gap:6px">
+              <button class="btn-ghost" style="flex:1;padding:10px;font-size:12px" onclick="document.getElementById('punch-image-input').click()">📷 이미지 선택</button>
+              <button class="btn-ghost" style="flex:1;padding:10px;font-size:12px" onclick="pastePunchImage()">📋 붙여넣기</button>
+            </div>
+          `}
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">위치 * (예: 302동 502호 안방)</div>
+        <input id="punch-location" class="modal-input" value="${editItem?.location||''}" placeholder="302동 502호 안방" style="width:100%">
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">공종</div>
+        <div id="punch-cat-wrap" style="display:flex;gap:6px;flex-wrap:wrap">
+          ${PUNCH_CATS.map(c=>`<div data-cat="${c}" class="punch-cat-btn" style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${(editItem?.category||'기타')===c?'var(--primary)':'var(--border2)'};background:${(editItem?.category||'기타')===c?'var(--primary)':'var(--surface)'};color:${(editItem?.category||'기타')===c?'#fff':'var(--muted)'}">${c}</div>`).join('')}
+        </div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">내용</div>
+        <textarea id="punch-desc" class="modal-input" style="width:100%;height:80px;resize:none" placeholder="불량 내용을 입력하세요">${editItem?.description||''}</textarea>
+      </div>
+      <div style="margin-bottom:16px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">조치 기한 (선택)</div>
+        <input id="punch-due" type="date" class="modal-input" value="${editItem?.due_date||''}" style="width:100%">
+      </div>
+      <div style="display:flex;gap:8px">
+        ${editItem ? `<button class="btn-ghost" style="flex:1;color:#ef4444" onclick="if(confirm('삭제할까요?')){deletePunchItem('${editItem.id}').then(()=>{document.getElementById('punch-add-modal').remove();renderPunchView(document.getElementById('main-content'))})}">삭제</button>` : ''}
+        <button class="btn-ghost" style="flex:1" onclick="document.getElementById('punch-add-modal').remove()">취소</button>
+        <button class="btn-primary" style="flex:2" onclick="confirmPunchItem('${editItem?.id||''}')">저장</button>
+      </div>
+    </div>
+  `;
+
+  modal.querySelectorAll('.punch-cat-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      modal.querySelectorAll('.punch-cat-btn').forEach(b => { b.style.background='var(--surface)'; b.style.color='var(--muted)'; b.style.borderColor='var(--border2)'; });
+      btn.style.background='var(--primary)'; btn.style.color='#fff'; btn.style.borderColor='var(--primary)';
+    });
+  });
+
+  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+  modal.addEventListener('paste', e => {
+    const items = e.clipboardData?.items;
+    if(!items) return;
+    for(const item of items) {
+      if(item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if(!file) continue;
+        setPunchImagePreview(file);
+        showToast('📋 이미지를 붙여넣었어요');
+        break;
+      }
+    }
+  });
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('punch-location')?.focus(), 50);
+
+  // 수정 모드에서 기존 이미지 로드
+  if(editItem?.image_path) {
+    getLibraryThumbFileUrl(editItem.thumb_path||'').then(url => {
+      if(!url) return getLibraryFileUrl(editItem.image_path);
+      return url;
+    }).then(url => {
+      const img = modal.querySelector('.lib-thumb');
+      if(img && url) img.src = url;
+    });
+  }
+}
+
+function setPunchImagePreview(file) {
+  pendingPunchImageFile = file;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const wrap = document.getElementById('punch-image-preview-wrap');
+    if(wrap) wrap.innerHTML = `
+      <div style="position:relative;display:inline-block;width:100%">
+        <img src="${ev.target.result}" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;border:1px solid var(--border2)">
+        <button onclick="removePunchImage()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:13px">✕</button>
+      </div>
+    `;
+  };
+  reader.readAsDataURL(file);
+}
+
+function handlePunchImageSelect(e) {
+  const file = e.target.files?.[0];
+  if(file) setPunchImagePreview(file);
+}
+
+function removePunchImage() {
+  pendingPunchImageFile = null;
+  const wrap = document.getElementById('punch-image-preview-wrap');
+  if(wrap) wrap.innerHTML = `
+    <div style="display:flex;gap:6px">
+      <button class="btn-ghost" style="flex:1;padding:10px;font-size:12px" onclick="document.getElementById('punch-image-input').click()">📷 이미지 선택</button>
+      <button class="btn-ghost" style="flex:1;padding:10px;font-size:12px" onclick="pastePunchImage()">📋 붙여넣기</button>
+    </div>
+  `;
+}
+
+async function pastePunchImage() {
+  try {
+    const items = await navigator.clipboard.read();
+    for(const item of items) {
+      for(const type of item.types) {
+        if(type.startsWith('image/')) {
+          const blob = await item.getType(type);
+          const file = new File([blob], `punch_${Date.now()}.png`, { type });
+          setPunchImagePreview(file);
+          showToast('📋 이미지를 붙여넣었어요');
+          return;
+        }
+      }
+    }
+    showToast('클립보드에 이미지가 없어요.');
+  } catch(e) {
+    showToast('붙여넣기 권한이 필요해요. 브라우저에서 허용해주세요.');
+  }
+}
+
+async function confirmPunchItem(editId) {
+  const modal = document.getElementById('punch-add-modal');
+  const location = document.getElementById('punch-location')?.value.trim();
+  const desc = document.getElementById('punch-desc')?.value.trim();
+  const due = document.getElementById('punch-due')?.value || null;
+  const catBtn = modal?.querySelector('.punch-cat-btn[style*="var(--primary)"]');
+  const category = catBtn?.dataset.cat || '기타';
+
+  if(!location) { showToast('위치를 입력해주세요.'); return; }
+
+  const saveBtn = modal?.querySelector('.btn-primary');
+  if(saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '저장 중...'; }
+
+  try {
+    let image_path = undefined;
+    let thumb_path = undefined;
+
+    if(pendingPunchImageFile) {
+      const result = await uploadPunchImage(pendingPunchImageFile);
+      image_path = result.filePath;
+      thumb_path = result.thumbPath;
+    }
+
+    if(editId) {
+      const patch = { location, description: desc, due_date: due, category };
+      if(image_path !== undefined) { patch.image_path = image_path; patch.thumb_path = thumb_path; }
+      await updatePunchItem(editId, patch);
+      showToast('✅ 수정됐어요.');
+    } else {
+      await savePunchItem({ location, description: desc, due_date: due, category, image_path: image_path||null, thumb_path: thumb_path||null, status: '미조치' });
+      showToast('✅ 추가됐어요.');
+    }
+    modal?.remove();
+    renderPunchView(document.getElementById('main-content'));
+  } catch(e) {
+    showToast('저장 실패: ' + e.message);
+    if(saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '저장'; }
+  }
+}
+
+function renderPunchView(el) {
+  if(!el) return;
+  if(punchItems.length === 0) {
+    loadPunchItems().then(() => _renderPunchView(el));
+    return;
+  }
+  _renderPunchView(el);
+}
+
+function _renderPunchView(el) {
+  const total = punchItems.length;
+  const done = punchItems.filter(p => p.status === '조치완료').length;
+  const pending = total - done;
+  const rate = total ? Math.round(done / total * 100) : 0;
+
+  // 필터 적용
+  let filtered = punchItems;
+  if(punchFilter === '미조치') filtered = filtered.filter(p => p.status !== '조치완료');
+  if(punchFilter === '조치완료') filtered = filtered.filter(p => p.status === '조치완료');
+  if(punchCatFilter !== '전체') filtered = filtered.filter(p => p.category === punchCatFilter);
+
+  // 위치 목록 (동 단위 필터)
+  const locations = [...new Set(punchItems.map(p => p.location.split(' ')[0]).filter(Boolean))].sort();
+  if(punchLocationFilter !== '전체') filtered = filtered.filter(p => p.location.startsWith(punchLocationFilter));
+
+  const pendingItems = filtered.filter(p => p.status !== '조치완료');
+  const doneItems = filtered.filter(p => p.status === '조치완료');
+
+  function punchCard(p) {
+    const isDone = p.status === '조치완료';
+    return `
+      <div style="background:var(--card);border:0.5px solid var(--border2);border-radius:14px;overflow:hidden;cursor:pointer;${isDone?'opacity:0.6':''}" onclick="openPunchAddModal(${JSON.stringify(p).replace(/"/g,'&quot;')})">
+        <div style="height:140px;background:var(--surface);position:relative;display:flex;align-items:center;justify-content:center">
+          ${p.thumb_path||p.image_path ? `<img data-path="${p.thumb_path||p.image_path}" class="lib-thumb" style="width:100%;height:100%;object-fit:cover" onerror="if(this.dataset.loaded)this.style.display='none'">` : `<span style="font-size:32px">📷</span>`}
+          <div style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:500;padding:3px 8px;border-radius:4px">${p.location}</div>
+          <button onclick="event.stopPropagation();togglePunchStatus('${p.id}')" style="position:absolute;top:8px;right:8px;background:${isDone?'#10b981':'rgba(0,0,0,.4)'};color:#fff;border:none;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer">${isDone?'✅ 완료':'조치완료'}</button>
+        </div>
+        <div style="padding:10px 12px">
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
+            <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--surface);color:var(--muted);border:0.5px solid var(--border2)">${p.category||'기타'}</span>
+            ${p.due_date?`<span style="font-size:11px;color:var(--muted)">${p.due_date}</span>`:''}
+          </div>
+          <div style="font-size:13px;font-weight:500;color:var(--text);${isDone?'text-decoration:line-through':''}">${p.description||'내용 없음'}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">${p.created_at?new Date(p.created_at).toLocaleDateString('ko-KR'):''}</div>
+        </div>
+      </div>`;
+  }
+
+  el.innerHTML = `
+    <div style="padding:16px">
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">
+        <div style="background:var(--surface);border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">전체</div><div style="font-size:22px;font-weight:500;color:var(--text)">${total}</div></div>
+        <div style="background:var(--surface);border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">미조치</div><div style="font-size:22px;font-weight:500;color:#ef4444">${pending}</div></div>
+        <div style="background:var(--surface);border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">조치완료</div><div style="font-size:22px;font-weight:500;color:#10b981">${done}</div></div>
+        <div style="background:var(--surface);border-radius:10px;padding:12px 14px"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">완료율</div><div style="font-size:22px;font-weight:500;color:#f59e0b">${rate}%</div></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+        ${['전체','미조치','조치완료'].map(f=>`<div onclick="punchFilter='${f}';renderPunchView(document.getElementById('main-content'))" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid ${punchFilter===f?'var(--primary)':'var(--border2)'};background:${punchFilter===f?'var(--primary)':'var(--surface)'};color:${punchFilter===f?'#fff':'var(--muted)'}">${f}</div>`).join('')}
+        <select onchange="punchLocationFilter=this.value;renderPunchView(document.getElementById('main-content'))" style="font-size:12px;padding:5px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text)">
+          <option value="전체">전체 위치</option>
+          ${locations.map(l=>`<option value="${l}" ${punchLocationFilter===l?'selected':''}>${l}</option>`).join('')}
+        </select>
+        <select onchange="punchCatFilter=this.value;renderPunchView(document.getElementById('main-content'))" style="font-size:12px;padding:5px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text)">
+          <option value="전체">전체 공종</option>
+          ${PUNCH_CATS.map(c=>`<option value="${c}" ${punchCatFilter===c?'selected':''}>${c}</option>`).join('')}
+        </select>
+        <button class="btn-primary" style="padding:6px 14px;font-size:12px;margin-left:auto" onclick="openPunchAddModal()">+ 추가</button>
+      </div>
+      ${pendingItems.length ? `
+        <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:10px">미조치 ${pendingItems.length}건</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:1.5rem">
+          ${pendingItems.map(punchCard).join('')}
+        </div>` : ''}
+      ${doneItems.length ? `
+        <div style="height:0.5px;background:var(--border2);margin:0.5rem 0 1rem"></div>
+        <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:10px">조치완료 ${doneItems.length}건</div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+          ${doneItems.map(punchCard).join('')}
+        </div>` : ''}
+      ${!pendingItems.length && !doneItems.length ? `
+        <div style="text-align:center;padding:60px 0;color:var(--muted)">
+          <div style="font-size:32px;margin-bottom:12px">📌</div>
+          <div style="font-size:14px;font-weight:500">펀치리스트가 없어요</div>
+          <div style="font-size:12px;margin-top:6px">+ 추가 버튼으로 첫 항목을 등록해보세요</div>
+        </div>` : ''}
+    </div>
+  `;
+
+  loadLibraryThumbs();
+}
 let personalNotes = [];
 const PERSONAL_CATS_DEFAULT = ['투자기록','쇼핑목록','할일','약속','메모'];
 const PERSONAL_CAT_COLORS = {투자기록:'#10b981',쇼핑목록:'#f59e0b',할일:'#3b82f6',약속:'#8b5cf6',메모:'#6b7280'};
@@ -6185,11 +6548,12 @@ function initMenuOrderList() {
     drawing: {icon:'📐', label:'도면 관리'},
     construction: {icon:'🏗️', label:'시공 관리'},
     inspection: {icon:'📋', label:'검측요청서'},
+    punch: {icon:'📌', label:'펀치리스트'},
     todo: {icon:'✅', label:'할일'},
     personal: {icon:'📒', label:'개인노트'},
     settings: {icon:'⚙️', label:'설정'},
   };
-  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','todo','personal','settings'];
+  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','punch','todo','personal','settings'];
   let order = (appSettings.menuOrder && appSettings.menuOrder.length === defaultOrder.length)
     ? [...appSettings.menuOrder]
     : [...defaultOrder];
