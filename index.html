@@ -5728,6 +5728,22 @@ function openPunchAddModal(editItem = null) {
     <div style="background:var(--card);border-radius:14px;width:100%;max-width:460px;padding:20px;max-height:90vh;overflow-y:auto">
       <div style="font-size:15px;font-weight:700;margin-bottom:16px">${editItem ? '펀치리스트 수정' : '펀치리스트 추가'}</div>
 
+      ${editItem?.after_image_path ? `
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px">📸 사진 비교</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          ${editItem.image_path ? `
+          <div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:4px;text-align:center">Before</div>
+            <img data-path="${editItem.thumb_path||editItem.image_path}" class="lib-thumb" onclick="openPunchImageViewer('${editItem.image_path}')" style="width:100%;height:120px;object-fit:cover;border-radius:8px;border:1px solid var(--border2);cursor:zoom-in">
+          </div>` : ''}
+          <div>
+            <div style="font-size:11px;color:#10b981;margin-bottom:4px;text-align:center;font-weight:600">After ✅</div>
+            <img data-path="${editItem.after_thumb_path||editItem.after_image_path}" class="lib-thumb" onclick="openPunchImageViewer('${editItem.after_image_path}')" style="width:100%;height:120px;object-fit:cover;border-radius:8px;border:2px solid #10b981;cursor:zoom-in">
+          </div>
+        </div>
+      </div>` : ''}
+
       <div style="margin-bottom:12px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">사진 (여러 장 추가 가능)</div>
         <input type="file" id="punch-image-input" accept="image/*" style="display:none" onchange="handlePunchImageSelect(event)">
@@ -5977,6 +5993,51 @@ async function confirmPunchItem(editId) {
   }
 }
 
+async function openPunchImageViewer(imagePath) {
+  const existing = document.getElementById('punch-image-viewer');
+  if(existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'punch-image-viewer';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:4000;display:flex;align-items:center;justify-content:center;padding:20px;cursor:zoom-out';
+  modal.innerHTML = `
+    <div style="position:relative;max-width:100%;max-height:100%">
+      <img id="punch-viewer-img" src="" style="max-width:90vw;max-height:90vh;border-radius:8px;display:block">
+      <button onclick="document.getElementById('punch-image-viewer').remove()" style="position:absolute;top:-12px;right:-12px;background:#fff;color:#1a2332;border:none;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:16px;font-weight:700;box-shadow:0 2px 8px rgba(0,0,0,.3)">✕</button>
+    </div>
+  `;
+  modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
+  document.body.appendChild(modal);
+  const url = await getLibraryFileUrl(imagePath);
+  const img = document.getElementById('punch-viewer-img');
+  if(img && url) img.src = url;
+}
+
+function sharePunchItem(p) {
+  const loc = [p.building, p.unit, p.space].filter(Boolean).join(' ') || p.location || '';
+  const lines = [
+    '[펀치리스트]',
+    `📍 ${loc}`,
+    `🔧 ${p.category||''}${p.contractor?' | '+p.contractor:''}`,
+  ];
+  if(p.description) lines.push(`📋 ${p.description}`);
+  if(p.found_date) lines.push(`📅 발견일: ${p.found_date}`);
+  if(p.due_date) lines.push(`⏰ 조치기한: ${p.due_date}`);
+  lines.push(`🔴 상태: ${p.status||'미조치'}`);
+
+  const text = lines.join('\n');
+  if(navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => showToast('📋 클립보드에 복사됐어요. 카카오톡에 붙여넣기 하세요!'));
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('📋 클립보드에 복사됐어요. 카카오톡에 붙여넣기 하세요!');
+  }
+}
+
 function renderPunchView(el) {
   if(!el) return;
   if(punchItems.length === 0) {
@@ -6030,7 +6091,10 @@ function _renderPunchView(el) {
             ${p.due_date?`<span style="font-size:11px;color:var(--muted)">${p.due_date}</span>`:''}
           </div>
           <div style="font-size:13px;font-weight:500;color:var(--text);${isDone?'text-decoration:line-through':''}">${p.description||'내용 없음'}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">${p.found_date||''}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">
+            <div style="font-size:11px;color:var(--muted)">${p.found_date||''}</div>
+            <button onclick="event.stopPropagation();sharePunchItem(${JSON.stringify(p).replace(/"/g,'&quot;')})" style="background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;padding:2px 6px;border-radius:6px;border:0.5px solid var(--border2)">공유 📤</button>
+          </div>
         </div>
       </div>`;
   }
