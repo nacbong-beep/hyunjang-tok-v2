@@ -5840,10 +5840,12 @@ function openPunchAddModal(editItem = null) {
   document.body.appendChild(modal);
   setTimeout(() => document.getElementById('punch-building')?.focus(), 50);
 
-  // 기존 이미지 썸네일 로드
-  if(editItem?.id && imgs.length) {
+  // 기존 이미지 썸네일 로드 (before 여러 장 + after)
+  if(editItem?.id) {
     modal.querySelectorAll('.lib-thumb').forEach(img => {
-      getLibraryThumbFileUrl(img.dataset.path).then(url => url || getLibraryFileUrl(img.dataset.path)).then(url => {
+      const path = img.dataset.path;
+      if(!path) return;
+      getLibraryThumbFileUrl(path).then(url => url || getLibraryFileUrl(path)).then(url => {
         if(url) img.src = url;
       });
     });
@@ -6125,15 +6127,43 @@ function _renderPunchView(el) {
       </div>
       ${pendingItems.length ? `
         <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:10px">미조치 ${pendingItems.length}건</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:1.5rem">
-          ${pendingItems.map(punchCard).join('')}
-        </div>` : ''}
+        ${(() => {
+          const sorted = [...pendingItems].sort((a,b) => (b.found_date||b.created_at||'').localeCompare(a.found_date||a.created_at||''));
+          const groups = {};
+          sorted.forEach(p => {
+            const d = p.found_date || p.created_at?.slice(0,10) || '날짜 없음';
+            if(!groups[d]) groups[d] = [];
+            groups[d].push(p);
+          });
+          return Object.keys(groups).map(date => `
+            <div style="margin-bottom:1.2rem">
+              <div style="font-size:11px;font-weight:700;color:var(--primary);padding:4px 0;border-bottom:1px solid var(--border2);margin-bottom:8px">📅 ${date}</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+                ${groups[date].map(punchCard).join('')}
+              </div>
+            </div>
+          `).join('');
+        })()}` : ''}
       ${doneItems.length ? `
         <div style="height:0.5px;background:var(--border2);margin:0.5rem 0 1rem"></div>
         <div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:10px">조치완료 ${doneItems.length}건</div>
-        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
-          ${doneItems.map(punchCard).join('')}
-        </div>` : ''}
+        ${(() => {
+          const sorted = [...doneItems].sort((a,b) => (b.found_date||b.created_at||'').localeCompare(a.found_date||a.created_at||''));
+          const groups = {};
+          sorted.forEach(p => {
+            const d = p.found_date || p.created_at?.slice(0,10) || '날짜 없음';
+            if(!groups[d]) groups[d] = [];
+            groups[d].push(p);
+          });
+          return Object.keys(groups).map(date => `
+            <div style="margin-bottom:1.2rem">
+              <div style="font-size:11px;font-weight:700;color:#10b981;padding:4px 0;border-bottom:1px solid var(--border2);margin-bottom:8px">📅 ${date}</div>
+              <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px">
+                ${groups[date].map(punchCard).join('')}
+              </div>
+            </div>
+          `).join('');
+        })()}` : ''}
       ${!pendingItems.length && !doneItems.length ? `
         <div style="text-align:center;padding:60px 0;color:var(--muted)">
           <div style="font-size:32px;margin-bottom:12px">📌</div>
