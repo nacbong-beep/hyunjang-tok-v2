@@ -5461,8 +5461,16 @@ let punchItems = [];
 let punchFilter = '전체';
 let punchCatFilter = '전체';
 let punchLocationFilter = '전체';
+let punchContractorFilter = '전체';
 let pendingPunchImageFile = null;
-const PUNCH_CATS = ['도배','바닥','창호','설비','목공','기타'];
+const PUNCH_CATS_DEFAULT = ['도배','바닥','창호','설비','목공','기타'];
+
+function getPunchCats() {
+  return appSettings.punchCategories || PUNCH_CATS_DEFAULT;
+}
+function getPunchContractors() {
+  return appSettings.punchContractors || [];
+}
 
 async function loadPunchItems() {
   const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
@@ -5488,7 +5496,6 @@ async function savePunchItem(item) {
   });
   if(res.ok) { const rows = await res.json(); punchItems.unshift(rows[0]); }
 }
-
 async function updatePunchItem(id, patch) {
   const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
   await fetch(`${SUPABASE_URL}/rest/v1/punch_items?id=eq.${id}`, {
@@ -5551,6 +5558,10 @@ function openPunchAddModal(editItem = null) {
   const existing = document.getElementById('punch-add-modal');
   if(existing) existing.remove();
   pendingPunchImageFile = null;
+  const cats = getPunchCats();
+  const contractors = getPunchContractors();
+  const selCat = editItem?.category || cats[cats.length-1] || '기타';
+  const today = todayKey();
 
   const modal = document.createElement('div');
   modal.id = 'punch-add-modal';
@@ -5559,7 +5570,7 @@ function openPunchAddModal(editItem = null) {
     <div style="background:var(--card);border-radius:14px;width:100%;max-width:440px;padding:20px;max-height:90vh;overflow-y:auto">
       <div style="font-size:15px;font-weight:700;margin-bottom:16px">${editItem ? '펀치리스트 수정' : '펀치리스트 추가'}</div>
       <div style="margin-bottom:12px">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">사진 *</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">사진</div>
         <input type="file" id="punch-image-input" accept="image/*" style="display:none" onchange="handlePunchImageSelect(event)">
         <div id="punch-image-preview-wrap">
           ${editItem?.image_path ? `
@@ -5576,22 +5587,40 @@ function openPunchAddModal(editItem = null) {
         </div>
       </div>
       <div style="margin-bottom:12px">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">위치 * (예: 302동 502호 안방)</div>
-        <input id="punch-location" class="modal-input" value="${editItem?.location||''}" placeholder="302동 502호 안방" style="width:100%">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">위치 *</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <input id="punch-building" class="modal-input" value="${editItem?.building||''}" placeholder="302동">
+          <input id="punch-unit" class="modal-input" value="${editItem?.unit||''}" placeholder="502호">
+          <input id="punch-space" class="modal-input" value="${editItem?.space||''}" placeholder="안방">
+        </div>
       </div>
       <div style="margin-bottom:12px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">공종</div>
         <div id="punch-cat-wrap" style="display:flex;gap:6px;flex-wrap:wrap">
-          ${PUNCH_CATS.map(c=>`<div data-cat="${c}" class="punch-cat-btn" style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${(editItem?.category||'기타')===c?'var(--primary)':'var(--border2)'};background:${(editItem?.category||'기타')===c?'var(--primary)':'var(--surface)'};color:${(editItem?.category||'기타')===c?'#fff':'var(--muted)'}">${c}</div>`).join('')}
+          ${cats.map(c=>`<div data-cat="${c}" class="punch-cat-btn" style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${selCat===c?'var(--primary)':'var(--border2)'};background:${selCat===c?'var(--primary)':'var(--surface)'};color:${selCat===c?'#fff':'var(--muted)'}">${c}</div>`).join('')}
         </div>
       </div>
+      ${contractors.length ? `
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">협력사 (선택)</div>
+        <select id="punch-contractor" class="modal-input" style="width:100%">
+          <option value="">협력사 선택</option>
+          ${contractors.map(c=>`<option value="${c}" ${editItem?.contractor===c?'selected':''}>${c}</option>`).join('')}
+        </select>
+      </div>` : `<div style="margin-bottom:12px;font-size:12px;color:var(--muted)">💡 설정에서 협력사를 먼저 등록하면 협력사 선택이 가능해요.</div>`}
       <div style="margin-bottom:12px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">내용</div>
         <textarea id="punch-desc" class="modal-input" style="width:100%;height:80px;resize:none" placeholder="불량 내용을 입력하세요">${editItem?.description||''}</textarea>
       </div>
-      <div style="margin-bottom:16px">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">조치 기한 (선택)</div>
-        <input id="punch-due" type="date" class="modal-input" value="${editItem?.due_date||''}" style="width:100%">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px">최초 발견일</div>
+          <input id="punch-found" type="date" class="modal-input" value="${editItem?.found_date||today}" style="width:100%">
+        </div>
+        <div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:5px">조치 기한 (선택)</div>
+          <input id="punch-due" type="date" class="modal-input" value="${editItem?.due_date||''}" style="width:100%">
+        </div>
       </div>
       <div style="display:flex;gap:8px">
         ${editItem ? `<button class="btn-ghost" style="flex:1;color:#ef4444" onclick="if(confirm('삭제할까요?')){deletePunchItem('${editItem.id}').then(()=>{document.getElementById('punch-add-modal').remove();renderPunchView(document.getElementById('main-content'))})}">삭제</button>` : ''}
@@ -5623,14 +5652,11 @@ function openPunchAddModal(editItem = null) {
     }
   });
   document.body.appendChild(modal);
-  setTimeout(() => document.getElementById('punch-location')?.focus(), 50);
+  setTimeout(() => document.getElementById('punch-building')?.focus(), 50);
 
-  // 수정 모드에서 기존 이미지 로드
   if(editItem?.image_path) {
-    getLibraryThumbFileUrl(editItem.thumb_path||'').then(url => {
-      if(!url) return getLibraryFileUrl(editItem.image_path);
-      return url;
-    }).then(url => {
+    const path = editItem.thumb_path || editItem.image_path;
+    getLibraryThumbFileUrl(path).then(url => url || getLibraryFileUrl(editItem.image_path)).then(url => {
       const img = modal.querySelector('.lib-thumb');
       if(img && url) img.src = url;
     });
@@ -5690,13 +5716,18 @@ async function pastePunchImage() {
 
 async function confirmPunchItem(editId) {
   const modal = document.getElementById('punch-add-modal');
-  const location = document.getElementById('punch-location')?.value.trim();
+  const building = document.getElementById('punch-building')?.value.trim();
+  const unit = document.getElementById('punch-unit')?.value.trim();
+  const space = document.getElementById('punch-space')?.value.trim();
+  const location = [building, unit, space].filter(Boolean).join(' ');
   const desc = document.getElementById('punch-desc')?.value.trim();
   const due = document.getElementById('punch-due')?.value || null;
+  const found = document.getElementById('punch-found')?.value || todayKey();
+  const contractor = document.getElementById('punch-contractor')?.value || null;
   const catBtn = modal?.querySelector('.punch-cat-btn[style*="var(--primary)"]');
-  const category = catBtn?.dataset.cat || '기타';
+  const category = catBtn?.dataset.cat || getPunchCats().slice(-1)[0] || '기타';
 
-  if(!location) { showToast('위치를 입력해주세요.'); return; }
+  if(!building) { showToast('동을 입력해주세요.'); return; }
 
   const saveBtn = modal?.querySelector('.btn-primary');
   if(saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '저장 중...'; }
@@ -5704,20 +5735,18 @@ async function confirmPunchItem(editId) {
   try {
     let image_path = undefined;
     let thumb_path = undefined;
-
     if(pendingPunchImageFile) {
       const result = await uploadPunchImage(pendingPunchImageFile);
       image_path = result.filePath;
       thumb_path = result.thumbPath;
     }
-
     if(editId) {
-      const patch = { location, description: desc, due_date: due, category };
+      const patch = { building, unit, space, location, description: desc, due_date: due, found_date: found, contractor, category };
       if(image_path !== undefined) { patch.image_path = image_path; patch.thumb_path = thumb_path; }
       await updatePunchItem(editId, patch);
       showToast('✅ 수정됐어요.');
     } else {
-      await savePunchItem({ location, description: desc, due_date: due, category, image_path: image_path||null, thumb_path: thumb_path||null, status: '미조치' });
+      await savePunchItem({ building, unit, space, location, description: desc, due_date: due, found_date: found, contractor, category, image_path: image_path||null, thumb_path: thumb_path||null, status: '미조치' });
       showToast('✅ 추가됐어요.');
     }
     modal?.remove();
@@ -5748,30 +5777,36 @@ function _renderPunchView(el) {
   if(punchFilter === '미조치') filtered = filtered.filter(p => p.status !== '조치완료');
   if(punchFilter === '조치완료') filtered = filtered.filter(p => p.status === '조치완료');
   if(punchCatFilter !== '전체') filtered = filtered.filter(p => p.category === punchCatFilter);
+  if(punchContractorFilter !== '전체') filtered = filtered.filter(p => p.contractor === punchContractorFilter);
 
-  // 위치 목록 (동 단위 필터)
-  const locations = [...new Set(punchItems.map(p => p.location.split(' ')[0]).filter(Boolean))].sort();
-  if(punchLocationFilter !== '전체') filtered = filtered.filter(p => p.location.startsWith(punchLocationFilter));
+  // 동 목록 (building 필드 우선, 없으면 location 첫 단어)
+  const buildings = [...new Set(punchItems.map(p => p.building || p.location?.split(' ')[0]).filter(Boolean))].sort();
+  if(punchLocationFilter !== '전체') filtered = filtered.filter(p => (p.building || p.location?.split(' ')[0]) === punchLocationFilter);
+
+  // 협력사 목록
+  const contractors = [...new Set(punchItems.map(p => p.contractor).filter(Boolean))].sort();
 
   const pendingItems = filtered.filter(p => p.status !== '조치완료');
   const doneItems = filtered.filter(p => p.status === '조치완료');
 
   function punchCard(p) {
     const isDone = p.status === '조치완료';
+    const locLabel = [p.building, p.unit, p.space].filter(Boolean).join(' ') || p.location || '';
     return `
       <div style="background:var(--card);border:0.5px solid var(--border2);border-radius:14px;overflow:hidden;cursor:pointer;${isDone?'opacity:0.6':''}" onclick="openPunchAddModal(${JSON.stringify(p).replace(/"/g,'&quot;')})">
         <div style="height:140px;background:var(--surface);position:relative;display:flex;align-items:center;justify-content:center">
           ${p.thumb_path||p.image_path ? `<img data-path="${p.thumb_path||p.image_path}" class="lib-thumb" style="width:100%;height:100%;object-fit:cover" onerror="if(this.dataset.loaded)this.style.display='none'">` : `<span style="font-size:32px">📷</span>`}
-          <div style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:500;padding:3px 8px;border-radius:4px">${p.location}</div>
+          <div style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:500;padding:3px 8px;border-radius:4px">${locLabel}</div>
           <button onclick="event.stopPropagation();togglePunchStatus('${p.id}')" style="position:absolute;top:8px;right:8px;background:${isDone?'#10b981':'rgba(0,0,0,.4)'};color:#fff;border:none;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer">${isDone?'✅ 완료':'조치완료'}</button>
         </div>
         <div style="padding:10px 12px">
           <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
             <span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--surface);color:var(--muted);border:0.5px solid var(--border2)">${p.category||'기타'}</span>
+            ${p.contractor?`<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:#ede9fe;color:#7c3aed">${p.contractor}</span>`:''}
             ${p.due_date?`<span style="font-size:11px;color:var(--muted)">${p.due_date}</span>`:''}
           </div>
           <div style="font-size:13px;font-weight:500;color:var(--text);${isDone?'text-decoration:line-through':''}">${p.description||'내용 없음'}</div>
-          <div style="font-size:11px;color:var(--muted);margin-top:3px">${p.created_at?new Date(p.created_at).toLocaleDateString('ko-KR'):''}</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">${p.found_date||''}</div>
         </div>
       </div>`;
   }
@@ -5787,13 +5822,17 @@ function _renderPunchView(el) {
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
         ${['전체','미조치','조치완료'].map(f=>`<div onclick="punchFilter='${f}';renderPunchView(document.getElementById('main-content'))" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid ${punchFilter===f?'var(--primary)':'var(--border2)'};background:${punchFilter===f?'var(--primary)':'var(--surface)'};color:${punchFilter===f?'#fff':'var(--muted)'}">${f}</div>`).join('')}
         <select onchange="punchLocationFilter=this.value;renderPunchView(document.getElementById('main-content'))" style="font-size:12px;padding:5px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text)">
-          <option value="전체">전체 위치</option>
-          ${locations.map(l=>`<option value="${l}" ${punchLocationFilter===l?'selected':''}>${l}</option>`).join('')}
+          <option value="전체">전체 동</option>
+          ${buildings.map(l=>`<option value="${l}" ${punchLocationFilter===l?'selected':''}>${l}</option>`).join('')}
         </select>
         <select onchange="punchCatFilter=this.value;renderPunchView(document.getElementById('main-content'))" style="font-size:12px;padding:5px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text)">
           <option value="전체">전체 공종</option>
-          ${PUNCH_CATS.map(c=>`<option value="${c}" ${punchCatFilter===c?'selected':''}>${c}</option>`).join('')}
+          ${getPunchCats().map(c=>`<option value="${c}" ${punchCatFilter===c?'selected':''}>${c}</option>`).join('')}
         </select>
+        ${contractors.length ? `<select onchange="punchContractorFilter=this.value;renderPunchView(document.getElementById('main-content'))" style="font-size:12px;padding:5px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text)">
+          <option value="전체">전체 협력사</option>
+          ${contractors.map(c=>`<option value="${c}" ${punchContractorFilter===c?'selected':''}>${c}</option>`).join('')}
+        </select>` : ''}
         <button class="btn-primary" style="padding:6px 14px;font-size:12px;margin-left:auto" onclick="openPunchAddModal()">+ 추가</button>
       </div>
       ${pendingItems.length ? `
@@ -6408,6 +6447,49 @@ async function startThumbMigration() {
   localStorage.removeItem(LIB_THUMB_CACHE_KEY);
 }
 
+function addPunchCat() {
+  const input = document.getElementById('new-punch-cat');
+  const name = input?.value.trim();
+  if(!name) { showToast('공종 이름을 입력해주세요.'); return; }
+  const cats = appSettings.punchCategories || [...PUNCH_CATS_DEFAULT];
+  if(cats.includes(name)) { showToast('이미 있는 공종이에요.'); return; }
+  appSettings.punchCategories = [...cats, name];
+  save();
+  input.value = '';
+  renderSettingsView(document.getElementById('main-content'));
+  showToast('✅ 공종이 추가됐어요.');
+}
+
+function deletePunchCat(cat) {
+  if(!confirm(`"${cat}" 공종을 삭제할까요?`)) return;
+  const cats = appSettings.punchCategories || [...PUNCH_CATS_DEFAULT];
+  appSettings.punchCategories = cats.filter(c => c !== cat);
+  save();
+  renderSettingsView(document.getElementById('main-content'));
+  showToast(`✅ "${cat}" 공종이 삭제됐어요.`);
+}
+
+function addPunchContractor() {
+  const input = document.getElementById('new-punch-contractor');
+  const name = input?.value.trim();
+  if(!name) { showToast('협력사 이름을 입력해주세요.'); return; }
+  const list = appSettings.punchContractors || [];
+  if(list.includes(name)) { showToast('이미 있는 협력사에요.'); return; }
+  appSettings.punchContractors = [...list, name];
+  save();
+  input.value = '';
+  renderSettingsView(document.getElementById('main-content'));
+  showToast('✅ 협력사가 추가됐어요.');
+}
+
+function deletePunchContractor(name) {
+  if(!confirm(`"${name}" 협력사를 삭제할까요?`)) return;
+  appSettings.punchContractors = (appSettings.punchContractors || []).filter(c => c !== name);
+  save();
+  renderSettingsView(document.getElementById('main-content'));
+  showToast(`✅ "${name}" 협력사가 삭제됐어요.`);
+}
+
 function renderSettingsView(el) {
   el.innerHTML = `
     <div style="max-width:640px;display:flex;flex-direction:column;gap:16px">
@@ -6442,6 +6524,40 @@ function renderSettingsView(el) {
             <div id="gemini-models-result" style="margin-top:8px;font-size:11px;color:var(--muted);max-height:150px;overflow-y:auto"></div>
           </div>
           <div style="font-size:11px;color:var(--muted)">현재: ${aiEngine==='claude'?'Claude Haiku (AI 분류 + AI 검색)':'Gemini Flash (AI 분류 + AI 검색)'}</div>
+        </div>
+      </div>
+
+      <!-- 펀치리스트 공종 관리 -->
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">📌 펀치리스트 공종 관리</div></div>
+        <div id="punch-cat-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+          ${(appSettings.punchCategories || PUNCH_CATS_DEFAULT).map(cat => `
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
+              <span style="flex:1;font-size:13px;color:var(--text)">${cat}</span>
+              <button onclick="deletePunchCat('${cat}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>
+            </div>
+          `).join('')}
+        </div>
+        <div style="display:flex;gap:8px">
+          <input id="new-punch-cat" class="modal-input" placeholder="새 공종 이름" style="flex:1">
+          <button class="btn-primary" onclick="addPunchCat()" style="padding:8px 14px;white-space:nowrap">추가</button>
+        </div>
+      </div>
+
+      <!-- 펀치리스트 협력사 관리 -->
+      <div class="panel">
+        <div class="panel-head"><div class="panel-title">🏢 협력사 관리</div></div>
+        <div id="punch-contractor-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+          ${(appSettings.punchContractors || []).length ? (appSettings.punchContractors || []).map(c => `
+            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
+              <span style="flex:1;font-size:13px;color:var(--text)">${c}</span>
+              <button onclick="deletePunchContractor('${c}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>
+            </div>
+          `).join('') : '<div style="font-size:12px;color:var(--muted)">등록된 협력사가 없어요.</div>'}
+        </div>
+        <div style="display:flex;gap:8px">
+          <input id="new-punch-contractor" class="modal-input" placeholder="협력사 이름" style="flex:1">
+          <button class="btn-primary" onclick="addPunchContractor()" style="padding:8px 14px;white-space:nowrap">추가</button>
         </div>
       </div>
 
