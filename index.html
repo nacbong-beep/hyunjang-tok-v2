@@ -5472,6 +5472,44 @@ function getPunchContractors() {
   return appSettings.punchContractors || [];
 }
 
+let punchImages = {}; // punch_id -> [{id, image_path, thumb_path}]
+
+async function loadPunchImages(punchId) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/punch_images?punch_id=eq.${punchId}&order=created_at.asc`, {
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+  });
+  if(res.ok) punchImages[punchId] = await res.json();
+  return punchImages[punchId] || [];
+}
+
+async function savePunchImage(punchId, imagePath, thumbPath) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/punch_images`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', Prefer: 'return=representation' },
+    body: JSON.stringify({ punch_id: punchId, image_path: imagePath, thumb_path: thumbPath })
+  });
+  if(res.ok) {
+    const rows = await res.json();
+    if(!punchImages[punchId]) punchImages[punchId] = [];
+    punchImages[punchId].push(rows[0]);
+    return rows[0];
+  }
+  return null;
+}
+
+async function deletePunchImage(imageId, punchId) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  await fetch(`${SUPABASE_URL}/rest/v1/punch_images?id=eq.${imageId}`, {
+    method: 'DELETE',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}` }
+  });
+  if(punchImages[punchId]) {
+    punchImages[punchId] = punchImages[punchId].filter(img => img.id !== imageId);
+  }
+}
+
 async function loadPunchItems() {
   const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
   let userId = null;
@@ -5670,48 +5708,60 @@ function openPunchAddModal(editItem = null) {
   const existing = document.getElementById('punch-add-modal');
   if(existing) existing.remove();
   pendingPunchImageFile = null;
+  pendingPunchImages = [];
   const cats = getPunchCats();
   const contractors = getPunchContractors();
   const selCat = editItem?.category || cats[cats.length-1] || '기타';
   const today = todayKey();
+  const imgs = editItem ? (punchImages[editItem.id] || []) : [];
+
+  // 수정 모드이고 이미지 미로드 상태면 먼저 로드
+  if(editItem?.id && !punchImages[editItem.id]) {
+    loadPunchImages(editItem.id).then(() => openPunchAddModal(editItem));
+    return;
+  }
 
   const modal = document.createElement('div');
   modal.id = 'punch-add-modal';
   modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:3000;display:flex;align-items:center;justify-content:center;padding:20px';
   modal.innerHTML = `
-    <div style="background:var(--card);border-radius:14px;width:100%;max-width:440px;padding:20px;max-height:90vh;overflow-y:auto">
+    <div style="background:var(--card);border-radius:14px;width:100%;max-width:460px;padding:20px;max-height:90vh;overflow-y:auto">
       <div style="font-size:15px;font-weight:700;margin-bottom:16px">${editItem ? '펀치리스트 수정' : '펀치리스트 추가'}</div>
+
       <div style="margin-bottom:12px">
-        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">사진</div>
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">사진 (여러 장 추가 가능)</div>
         <input type="file" id="punch-image-input" accept="image/*" style="display:none" onchange="handlePunchImageSelect(event)">
-        <div id="punch-image-preview-wrap">
-          ${editItem?.image_path ? `
-            <div style="position:relative;display:inline-block;width:100%">
-              <img data-path="${editItem.thumb_path||editItem.image_path}" class="lib-thumb" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;border:1px solid var(--border2)">
-              <button onclick="removePunchImage()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:24px;height:24px;cursor:pointer;font-size:13px">✕</button>
+        <div id="punch-images-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+          ${imgs.map(img => `
+            <div style="position:relative;width:80px;height:80px">
+              <img data-path="${img.thumb_path||img.image_path}" class="lib-thumb" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border2)">
+              <button onclick="removeSavedPunchImage('${img.id}','${editItem?.id||''}')" style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px;line-height:1">✕</button>
             </div>
-          ` : `
-            <div style="display:flex;gap:6px">
-              <button class="btn-ghost" style="flex:1;padding:10px;font-size:12px" onclick="document.getElementById('punch-image-input').click()">📷 이미지 선택</button>
-              <button class="btn-ghost" style="flex:1;padding:10px;font-size:12px" onclick="pastePunchImage()">📋 붙여넣기</button>
-            </div>
-          `}
+          `).join('')}
+          <div id="punch-pending-images" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button class="btn-ghost" style="flex:1;padding:8px;font-size:12px" onclick="document.getElementById('punch-image-input').click()">📷 이미지 선택</button>
+          <button class="btn-ghost" style="flex:1;padding:8px;font-size:12px" onclick="pastePunchImage()">📋 붙여넣기</button>
         </div>
       </div>
+
       <div style="margin-bottom:12px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">위치 *</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-          <input id="punch-building" class="modal-input" value="${editItem?.building||''}" placeholder="302동" oninput="if(this.value&&!/동$/.test(this.value.trim())){}">
+          <input id="punch-building" class="modal-input" value="${editItem?.building||''}" placeholder="302동">
           <input id="punch-unit" class="modal-input" value="${editItem?.unit||''}" placeholder="502호">
           <input id="punch-space" class="modal-input" value="${editItem?.space||''}" placeholder="안방">
         </div>
       </div>
+
       <div style="margin-bottom:12px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">공종</div>
         <div id="punch-cat-wrap" style="display:flex;gap:6px;flex-wrap:wrap">
           ${cats.map(c=>`<div data-cat="${c}" class="punch-cat-btn" style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${selCat===c?'var(--primary)':'var(--border2)'};background:${selCat===c?'var(--primary)':'var(--surface)'};color:${selCat===c?'#fff':'var(--muted)'}">${c}</div>`).join('')}
         </div>
       </div>
+
       ${contractors.length ? `
       <div style="margin-bottom:12px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">협력사 (선택)</div>
@@ -5719,11 +5769,18 @@ function openPunchAddModal(editItem = null) {
           <option value="">협력사 선택</option>
           ${contractors.map(c=>`<option value="${c}" ${editItem?.contractor===c?'selected':''}>${c}</option>`).join('')}
         </select>
-      </div>` : `<div style="margin-bottom:12px;font-size:12px;color:var(--muted)">💡 설정에서 협력사를 먼저 등록하면 협력사 선택이 가능해요.</div>`}
+      </div>` : ''}
+
       <div style="margin-bottom:12px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">내용</div>
-        <textarea id="punch-desc" class="modal-input" style="width:100%;height:80px;resize:none" placeholder="불량 내용을 입력하세요">${editItem?.description||''}</textarea>
+        <textarea id="punch-desc" class="modal-input" style="width:100%;height:60px;resize:none" placeholder="불량 내용">${editItem?.description||''}</textarea>
       </div>
+
+      <div style="margin-bottom:12px">
+        <div style="font-size:12px;color:var(--muted);margin-bottom:5px">메모 (카드에 미표시)</div>
+        <textarea id="punch-memo" class="modal-input" style="width:100%;height:60px;resize:none" placeholder="추가 메모 (내부용)">${editItem?.memo||''}</textarea>
+      </div>
+
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
         <div>
           <div style="font-size:12px;color:var(--muted);margin-bottom:5px">최초 발견일</div>
@@ -5734,6 +5791,7 @@ function openPunchAddModal(editItem = null) {
           <input id="punch-due" type="date" class="modal-input" value="${editItem?.due_date||''}" style="width:100%">
         </div>
       </div>
+
       <div style="display:flex;gap:8px">
         ${editItem ? `<button class="btn-ghost" style="flex:1;color:#ef4444" onclick="if(confirm('삭제할까요?')){deletePunchItem('${editItem.id}').then(()=>{document.getElementById('punch-add-modal').remove();renderPunchView(document.getElementById('main-content'))})}">삭제</button>` : ''}
         <button class="btn-ghost" style="flex:1" onclick="document.getElementById('punch-add-modal').remove()">취소</button>
@@ -5757,7 +5815,7 @@ function openPunchAddModal(editItem = null) {
       if(item.type.startsWith('image/')) {
         const file = item.getAsFile();
         if(!file) continue;
-        setPunchImagePreview(file);
+        addPunchPendingImage(file);
         showToast('📋 이미지를 붙여넣었어요');
         break;
       }
@@ -5766,13 +5824,50 @@ function openPunchAddModal(editItem = null) {
   document.body.appendChild(modal);
   setTimeout(() => document.getElementById('punch-building')?.focus(), 50);
 
-  if(editItem?.image_path) {
-    const path = editItem.thumb_path || editItem.image_path;
-    getLibraryThumbFileUrl(path).then(url => url || getLibraryFileUrl(editItem.image_path)).then(url => {
-      const img = modal.querySelector('.lib-thumb');
-      if(img && url) img.src = url;
+  // 기존 이미지 썸네일 로드
+  if(editItem?.id && imgs.length) {
+    modal.querySelectorAll('.lib-thumb').forEach(img => {
+      getLibraryThumbFileUrl(img.dataset.path).then(url => url || getLibraryFileUrl(img.dataset.path)).then(url => {
+        if(url) img.src = url;
+      });
     });
   }
+}
+
+let pendingPunchImages = []; // [{file, previewUrl}]
+
+function addPunchPendingImage(file) {
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const idx = pendingPunchImages.length;
+    pendingPunchImages.push({ file, previewUrl: ev.target.result });
+    const wrap = document.getElementById('punch-pending-images');
+    if(wrap) {
+      const div = document.createElement('div');
+      div.style.cssText = 'position:relative;width:80px;height:80px';
+      div.innerHTML = `
+        <img src="${ev.target.result}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid var(--border2)">
+        <button onclick="removePendingPunchImage(${idx},this.parentElement)" style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border:none;border-radius:50%;width:20px;height:20px;cursor:pointer;font-size:11px;line-height:1">✕</button>
+      `;
+      wrap.appendChild(div);
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function removePendingPunchImage(idx, el) {
+  pendingPunchImages[idx] = null;
+  el?.remove();
+}
+
+async function removeSavedPunchImage(imageId, punchId) {
+  await deletePunchImage(imageId, punchId);
+  const modal = document.getElementById('punch-add-modal');
+  if(modal) {
+    const btn = modal.querySelector(`button[onclick*="${imageId}"]`);
+    btn?.parentElement?.remove();
+  }
+  showToast('🗑️ 사진이 삭제됐어요.');
 }
 
 function setPunchImagePreview(file) {
@@ -5792,7 +5887,8 @@ function setPunchImagePreview(file) {
 
 function handlePunchImageSelect(e) {
   const file = e.target.files?.[0];
-  if(file) setPunchImagePreview(file);
+  if(file) addPunchPendingImage(file);
+  e.target.value = '';
 }
 
 function removePunchImage() {
@@ -5814,7 +5910,7 @@ async function pastePunchImage() {
         if(type.startsWith('image/')) {
           const blob = await item.getType(type);
           const file = new File([blob], `punch_${Date.now()}.png`, { type });
-          setPunchImagePreview(file);
+          addPunchPendingImage(file);
           showToast('📋 이미지를 붙여넣었어요');
           return;
         }
@@ -5822,7 +5918,7 @@ async function pastePunchImage() {
     }
     showToast('클립보드에 이미지가 없어요.');
   } catch(e) {
-    showToast('붙여넣기 권한이 필요해요. 브라우저에서 허용해주세요.');
+    showToast('붙여넣기 권한이 필요해요.');
   }
 }
 
@@ -5833,6 +5929,7 @@ async function confirmPunchItem(editId) {
   const space = document.getElementById('punch-space')?.value.trim();
   const location = [building, unit, space].filter(Boolean).join(' ');
   const desc = document.getElementById('punch-desc')?.value.trim();
+  const memo = document.getElementById('punch-memo')?.value.trim();
   const due = document.getElementById('punch-due')?.value || null;
   const found = document.getElementById('punch-found')?.value || todayKey();
   const contractor = document.getElementById('punch-contractor')?.value || null;
@@ -5845,22 +5942,33 @@ async function confirmPunchItem(editId) {
   if(saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '저장 중...'; }
 
   try {
-    let image_path = undefined;
-    let thumb_path = undefined;
-    if(pendingPunchImageFile) {
-      const result = await uploadPunchImage(pendingPunchImageFile);
-      image_path = result.filePath;
-      thumb_path = result.thumbPath;
-    }
+    let punchId = editId;
+
     if(editId) {
-      const patch = { building, unit, space, location, description: desc, due_date: due, found_date: found, contractor, category };
-      if(image_path !== undefined) { patch.image_path = image_path; patch.thumb_path = thumb_path; }
-      await updatePunchItem(editId, patch);
+      await updatePunchItem(editId, { building, unit, space, location, description: desc, memo, due_date: due, found_date: found, contractor, category });
       showToast('✅ 수정됐어요.');
     } else {
-      await savePunchItem({ building, unit, space, location, description: desc, due_date: due, found_date: found, contractor, category, image_path: image_path||null, thumb_path: thumb_path||null, status: '미조치' });
+      await savePunchItem({ building, unit, space, location, description: desc, memo, due_date: due, found_date: found, contractor, category, status: '미조치' });
+      punchId = punchItems[0]?.id;
       showToast('✅ 추가됐어요.');
     }
+
+    // 대기 중인 이미지들 업로드
+    const pendingFiles = pendingPunchImages.filter(Boolean);
+    if(pendingFiles.length && punchId) {
+      for(const item of pendingFiles) {
+        const result = await uploadPunchImage(item.file);
+        await savePunchImage(punchId, result.filePath, result.thumbPath);
+      }
+      pendingPunchImages = [];
+    }
+
+    // 대표 썸네일 업데이트 (첫 번째 이미지로)
+    const imgs = punchImages[punchId] || [];
+    if(imgs.length > 0) {
+      await updatePunchItem(punchId, { image_path: imgs[0].image_path, thumb_path: imgs[0].thumb_path });
+    }
+
     modal?.remove();
     renderPunchView(document.getElementById('main-content'));
   } catch(e) {
@@ -5905,12 +6013,14 @@ function _renderPunchView(el) {
     const isDone = p.status === '조치완료';
     const locLabel = [p.building, p.unit, p.space].filter(Boolean).join(' ') || p.location || '';
     const imgPath = isDone && p.after_thumb_path ? p.after_thumb_path : (p.thumb_path || p.image_path);
+    const imgCount = (punchImages[p.id] || []).length;
     return `
       <div style="background:var(--card);border:0.5px solid var(--border2);border-radius:14px;overflow:hidden;cursor:pointer;${isDone?'opacity:0.6':''}" onclick="openPunchAddModal(${JSON.stringify(p).replace(/"/g,'&quot;')})">
         <div style="height:140px;background:var(--surface);position:relative;display:flex;align-items:center;justify-content:center">
           ${imgPath ? `<img data-path="${imgPath}" class="lib-thumb" style="width:100%;height:100%;object-fit:cover" onerror="if(this.dataset.loaded)this.style.display='none'">` : `<span style="font-size:32px">📷</span>`}
           <div style="position:absolute;top:8px;left:8px;background:rgba(0,0,0,.55);color:#fff;font-size:11px;font-weight:500;padding:3px 8px;border-radius:4px">${locLabel}</div>
           ${!isDone ? `<button onclick="event.stopPropagation();openPunchCompleteModal('${p.id}')" style="position:absolute;top:8px;right:8px;background:rgba(0,0,0,.4);color:#fff;border:none;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;cursor:pointer">미조치</button>` : `<div style="position:absolute;top:8px;right:8px;background:#10b981;color:#fff;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600">✅ 완료</div>`}
+          ${imgCount > 1 ? `<div style="position:absolute;bottom:6px;left:6px;background:rgba(0,0,0,.55);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px">📷 ${imgCount}</div>` : ''}
           ${isDone && p.after_thumb_path ? `<div style="position:absolute;bottom:6px;right:6px;background:rgba(16,185,129,.8);color:#fff;font-size:10px;padding:2px 6px;border-radius:4px">after</div>` : ''}
         </div>
         <div style="padding:10px 12px">
