@@ -297,7 +297,7 @@ body.is-mobile-device .dash-ai-bar{display:none!important}
 }
 </style>
 </head>
-<body>
+<body style="visibility:hidden">
 <div id="app"></div>
 <div id="pw-modal" style="position:fixed;inset:0;background:#1a2332;z-index:9999;display:flex;align-items:center;justify-content:center;">
   <div style="background:#fff;border-radius:20px;padding:36px;width:90%;max-width:360px;text-align:center;box-shadow:0 24px 64px rgba(0,0,0,.3);">
@@ -360,13 +360,41 @@ async function loadFromSupabase() {
 async function saveToSupabase() {
   try {
     await Promise.all([
-      rooms.length ? sbFetch('rooms', 'POST', rooms.map(r=>({id:r.id,name:r.name,favorite:r.favorite,archived:r.archived,sort_order:r.sortOrder})), '') : null,
-      messages.length ? sbFetch('messages', 'POST', messages.map(m=>({id:m.id,room_name:m.roomName,tag:m.tag,sender:m.sender,summary:m.summary,content:m.content,message_date:m.messageDate,event_date:m.eventDate||null,created_at:m.createdAt,is_todo:m.isTodo})), '') : null,
-      todos.length ? sbFetch('todos', 'POST', todos.map(t=>({id:t.id,message_id:t.messageId,title:t.title,tag:t.tag,room_name:t.roomName,due_date:t.dueDate,done:t.done,done_at:t.doneAt||null})), '') : null,
-      customEvents.length ? sbFetch('custom_events', 'POST', customEvents.map(e=>({id:e.id,title:e.title,date:e.date,end_date:e.endDate||null,tag:e.tag||'일정',color:e.color||'none',memo:e.memo||'',created_at:e.createdAt||new Date().toISOString()})), '') : null,
+      saveRoomsToSupabase(),
+      saveMessagesToSupabase(),
+      saveTodosToSupabase(),
+      saveCustomEventsToSupabase(),
       saveSettingsToSupabase(),
     ]);
   } catch(e) { console.error('Supabase 저장 실패:', e); }
+}
+
+async function saveRoomsToSupabase() {
+  if(!rooms.length) return;
+  try {
+    await sbFetch('rooms', 'POST', rooms.map(r=>({id:r.id,name:r.name,favorite:r.favorite,archived:r.archived,sort_order:r.sortOrder})), '');
+  } catch(e) { console.error('rooms 저장 실패:', e); }
+}
+
+async function saveMessagesToSupabase() {
+  if(!messages.length) return;
+  try {
+    await sbFetch('messages', 'POST', messages.map(m=>({id:m.id,room_name:m.roomName,tag:m.tag,sender:m.sender,summary:m.summary,content:m.content,message_date:m.messageDate,event_date:m.eventDate||null,created_at:m.createdAt,is_todo:m.isTodo})), '');
+  } catch(e) { console.error('messages 저장 실패:', e); }
+}
+
+async function saveTodosToSupabase() {
+  if(!todos.length) return;
+  try {
+    await sbFetch('todos', 'POST', todos.map(t=>({id:t.id,message_id:t.messageId,title:t.title,tag:t.tag,room_name:t.roomName,due_date:t.dueDate,done:t.done,done_at:t.doneAt||null})), '');
+  } catch(e) { console.error('todos 저장 실패:', e); }
+}
+
+async function saveCustomEventsToSupabase() {
+  if(!customEvents.length) return;
+  try {
+    await sbFetch('custom_events', 'POST', customEvents.map(e=>({id:e.id,title:e.title,date:e.date,end_date:e.endDate||null,tag:e.tag||'일정',color:e.color||'none',memo:e.memo||'',created_at:e.createdAt||new Date().toISOString()})), '');
+  } catch(e) { console.error('custom_events 저장 실패:', e); }
 }
 
 async function saveSettingsToSupabase() {
@@ -492,7 +520,7 @@ function save() {
   localStorage.setItem('hj3_settings', JSON.stringify(appSettings));
   updateStats();
   renderSidebar();
-  saveToSupabase().catch(e => console.error(e));
+  // ※ Supabase 저장은 각 함수에서 직접 호출
 }
 
 function updateStats() {
@@ -624,16 +652,16 @@ function toggleSection(name) {
   renderSidebar();
 }
 
-function toggleFav(id) { rooms=rooms.map(r=>r.id===id?{...r,favorite:!r.favorite}:r); save(); }
+function toggleFav(id) { rooms=rooms.map(r=>r.id===id?{...r,favorite:!r.favorite}:r); save(); saveRoomsToSupabase(); }
 function moveRoom(id,dir) {
   const sorted=[...rooms].sort((a,b)=>a.sortOrder-b.sortOrder);
   const i=sorted.findIndex(r=>r.id===id);
   const j=i+dir;
   if(i<0||j<0||j>=sorted.length) return;
   [sorted[i].sortOrder,sorted[j].sortOrder]=[sorted[j].sortOrder,sorted[i].sortOrder];
-  rooms=sorted; save();
+  rooms=sorted; save(); saveRoomsToSupabase();
 }
-function archiveRoom(id) { rooms=rooms.map(r=>r.id===id?{...r,archived:!r.archived}:r); save(); }
+function archiveRoom(id) { rooms=rooms.map(r=>r.id===id?{...r,archived:!r.archived}:r); save(); saveRoomsToSupabase(); }
 
 function deleteRoomConfirm(id) {
   const room = rooms.find(r=>r.id===id);
@@ -645,7 +673,7 @@ function deleteRoomConfirm(id) {
   if(confirm(msg)) {
     messages = messages.filter(m=>m.roomName!==room.name);
     rooms = rooms.filter(r=>r.id!==id);
-    save();
+    save(); saveRoomsToSupabase(); saveMessagesToSupabase();
     renderSidebar();
     setView('dashboard');
     showToast(`🗑️ "${room.name}" 삭제됐어요.`);
@@ -659,7 +687,7 @@ function confirmAddRoom() {
   const name=document.getElementById('room-name-input').value.trim();
   if(!name) return;
   rooms.push({id:uid(),name,favorite:false,archived:false,sortOrder:rooms.length+1});
-  save(); closeModal();
+  save(); saveRoomsToSupabase(); closeModal();
   document.getElementById('room-name-input').value='';
   showToast('채팅방이 추가됐어요!');
 }
@@ -1276,7 +1304,7 @@ function drawRangeBarsInCell(y, mo, gridId='cal-grid-main') {
 // ===== 할일 =====
 function toggleTodo(id) {
   todos=todos.map(t=>t.id===id?{...t,done:!t.done,doneAt:!t.done?new Date().toISOString():null}:t);
-  save();
+  save(); saveTodosToSupabase();
   if(currentView==='todo') renderTodoView(document.getElementById('main-content'));
   else if(currentView==='dashboard') renderDashboard(document.getElementById('main-content'));
 }
@@ -1323,7 +1351,7 @@ function completeChecked() {
   if(!confirm(`선택한 ${count}건을 완료처리할까요?`)) return;
   todos=todos.map(t=>checkedTodos.has(t.id)?{...t,done:true,doneAt:new Date().toISOString()}:t);
   checkedTodos.clear();
-  save();
+  save(); saveTodosToSupabase();
   renderTodoView(document.getElementById('main-content'));
   showToast(`✅ ${count}건 완료처리 완료!`);
 }
@@ -2134,7 +2162,7 @@ function savePreview() {
   }));
   messages=[...newMsgs,...messages];
   if(newTodos.length) todos=[...newTodos,...todos];
-  save();
+  save(); saveMessagesToSupabase(); if(newTodos.length) saveTodosToSupabase();
   showToast(`✅ ${newMsgs.length}건 저장! (할일 ${newTodos.length}건)`);
   previewItems=[];
   setView('dashboard');
@@ -2288,7 +2316,8 @@ function importBackup() {
       if(!data.rooms||!data.messages){showToast('❌ 올바른 백업 파일이 아니에요');return;}
       if(!confirm(`복원할까요?\n메시지 ${data.messages.length}건, 할일 ${data.todos?.length||0}건`)) return;
       rooms=data.rooms||[];messages=data.messages||[];todos=data.todos||[];starredRooms=data.starredRooms||[];
-      save();setView('dashboard');showToast('✅ 복원 완료!');
+      save(); saveRoomsToSupabase(); saveMessagesToSupabase(); saveTodosToSupabase();
+      setView('dashboard');showToast('✅ 복원 완료!');
     }catch{showToast('❌ 파일 읽기 오류');}
   };
   input.click();
@@ -2364,7 +2393,7 @@ function confirmNewRoomShare() {
   const name = document.getElementById('new-room-share-input').value.trim();
   if(!name) { showToast('채팅방 이름을 입력해주세요'); return; }
   rooms.push({id:uid(), name, favorite:false, archived:false, sortOrder:rooms.length+1});
-  save();
+  save(); saveRoomsToSupabase();
   selectRoomFromShare(name);
 }
 
@@ -6671,7 +6700,7 @@ function addPersonalCat() {
   const cats = appSettings.personalCategories || ['투자기록','쇼핑목록','할일','약속','메모'];
   if(cats.includes(name)) { showToast('이미 있는 카테고리예요.'); return; }
   appSettings.personalCategories = [...cats, name];
-  save();
+  save(); saveSettingsToSupabase();
   input.value = '';
   renderSettingsView(document.getElementById('main-content'));
   showToast('✅ 카테고리가 추가됐어요.');
@@ -6681,7 +6710,7 @@ async function deletePersonalCat(cat) {
   if(!confirm(`"${cat}" 카테고리를 삭제할까요?\n해당 카테고리의 노트는 "메모"로 변경됩니다.`)) return;
   const cats = appSettings.personalCategories || ['투자기록','쇼핑목록','할일','약속','메모'];
   appSettings.personalCategories = cats.filter(c => c !== cat);
-  save();
+  save(); saveSettingsToSupabase();
   // 해당 카테고리 노트를 "메모"로 변경
   const affected = personalNotes.filter(n => n.category === cat);
   await Promise.all(affected.map(n => updatePersonalNote(n.id, { category: '메모' })));
@@ -6772,7 +6801,7 @@ function addPunchCat() {
   const cats = appSettings.punchCategories || [...PUNCH_CATS_DEFAULT];
   if(cats.includes(name)) { showToast('이미 있는 공종이에요.'); return; }
   appSettings.punchCategories = [...cats, name];
-  save();
+  save(); saveSettingsToSupabase();
   input.value = '';
   renderSettingsView(document.getElementById('main-content'));
   showToast('✅ 공종이 추가됐어요.');
@@ -6782,7 +6811,7 @@ function deletePunchCat(cat) {
   if(!confirm(`"${cat}" 공종을 삭제할까요?`)) return;
   const cats = appSettings.punchCategories || [...PUNCH_CATS_DEFAULT];
   appSettings.punchCategories = cats.filter(c => c !== cat);
-  save();
+  save(); saveSettingsToSupabase();
   renderSettingsView(document.getElementById('main-content'));
   showToast(`✅ "${cat}" 공종이 삭제됐어요.`);
 }
@@ -6794,7 +6823,7 @@ function addPunchContractor() {
   const list = appSettings.punchContractors || [];
   if(list.includes(name)) { showToast('이미 있는 협력사에요.'); return; }
   appSettings.punchContractors = [...list, name];
-  save();
+  save(); saveSettingsToSupabase();
   input.value = '';
   renderSettingsView(document.getElementById('main-content'));
   showToast('✅ 협력사가 추가됐어요.');
@@ -6803,7 +6832,7 @@ function addPunchContractor() {
 function deletePunchContractor(name) {
   if(!confirm(`"${name}" 협력사를 삭제할까요?`)) return;
   appSettings.punchContractors = (appSettings.punchContractors || []).filter(c => c !== name);
-  save();
+  save(); saveSettingsToSupabase();
   renderSettingsView(document.getElementById('main-content'));
   showToast(`✅ "${name}" 협력사가 삭제됐어요.`);
 }
@@ -7042,7 +7071,7 @@ function initMenuOrderList() {
 
 function saveProfileSettings() {
   appSettings.siteName = document.getElementById('set-site').value.trim();
-  save();
+  save(); saveSettingsToSupabase();
   updateLogoSub();
   showToast('✅ 저장됐어요!');
 }
@@ -7051,13 +7080,13 @@ function saveCalSettings() {
   appSettings.calWeekStart = Number(document.getElementById('set-weekstart').value);
   appSettings.showHoliday = document.getElementById('set-holiday').checked;
   appSettings.upcomingDays = Number(document.getElementById('set-upcoming').value);
-  save();
+  save(); saveSettingsToSupabase();
   showToast('✅ 저장됐어요!');
 }
 
 function saveDashSettings() {
   appSettings.missedDays = Number(document.getElementById('set-missed').value);
-  save();
+  save(); saveSettingsToSupabase();
   showToast('✅ 저장됐어요!');
 }
 
@@ -7206,7 +7235,7 @@ function onDayDrop(e, toIdx, dateStr) {
     return ai-bi;
   });
 
-  save();
+  save(); saveCustomEventsToSupabase();
   handleDayClick(dateStr);
   // 캘린더 셀도 즉시 갱신
   const el = document.getElementById('main-content');
@@ -7337,7 +7366,7 @@ function saveCustomEvent() {
     customEvents.push({id:uid(),title,date,endDate:endDate||null,tag,color,memo,createdAt:new Date().toISOString()});
     showToast('✅ 일정이 추가됐어요!');
   }
-  save();
+  save(); saveCustomEventsToSupabase();
   closeEventModal();
   const el = document.getElementById('main-content');
   if(currentView==='calendar') renderCalendarView(el);
@@ -7350,7 +7379,6 @@ function deleteCustomEvent() {
   const delId = editingEventId;
   customEvents = customEvents.filter(e=>e.id!==delId);
   save();
-  // Supabase에서도 삭제
   sbFetch('custom_events', 'DELETE', null, `?id=eq.${delId}`).catch(e=>console.error(e));
   closeEventModal();
   showToast('🗑️ 일정이 삭제됐어요');
@@ -7390,7 +7418,7 @@ function saveMsgEvent() {
   const content = document.getElementById('msg-event-content').value.trim();
   if(!summary) { showToast('제목을 입력해주세요'); return; }
   messages = messages.map(m=>m.id===editingMsgId?{...m,summary,sender,messageDate:date,eventDate:eventDate||null,tag,content}:m);
-  save();
+  save(); saveMessagesToSupabase();
   closeMsgEventModal();
   showToast('✅ 수정됐어요!');
   const el = document.getElementById('main-content');
@@ -7404,7 +7432,7 @@ function deleteMsgEvent() {
   if(!confirm('이 일정을 삭제할까요?')) return;
   messages = messages.filter(m=>m.id!==editingMsgId);
   todos = todos.filter(t=>t.messageId!==editingMsgId);
-  save();
+  save(); saveMessagesToSupabase(); saveTodosToSupabase();
   closeMsgEventModal();
   showToast('🗑️ 일정이 삭제됐어요');
   const el = document.getElementById('main-content');
@@ -7604,6 +7632,7 @@ function initApp() {
 
 // 구글 로그인 체크
 checkAuth().then(ok => {
+  document.body.style.visibility = 'visible';
   if(ok) {
     document.getElementById('pw-modal').style.display = 'none';
     initApp();
