@@ -5374,9 +5374,10 @@ async function confirmSavePersonalEvent(editId) {
   if(!title || !date) { showToast('제목과 날짜를 입력해주세요.'); return; }
 
   const isOffDay = /^휴무/.test(title.trim());
+  const finalColor = isOffDay ? '#ef4444' : color;
 
   if(editId) {
-    await updatePersonalEvent(editId, { title, date, end_date, memo, color });
+    await updatePersonalEvent(editId, { title, date, end_date, memo, color: finalColor });
     // 휴무면 customEvents도 업데이트
     if(isOffDay) {
       const existing = customEvents.find(e => /^휴무/.test(e.title?.trim()) && e.date === date);
@@ -5389,7 +5390,7 @@ async function confirmSavePersonalEvent(editId) {
     }
     showToast('✅ 수정됐어요.');
   } else {
-    await savePersonalEvent({ title, date, end_date, memo, color });
+    await savePersonalEvent({ title, date, end_date, memo, color: finalColor });
     // 휴무면 customEvents에도 동시 저장
     if(isOffDay) {
       customEvents.push({id:uid(), title, date, endDate: end_date||null, tag:'일정', color:'#ef4444', memo, createdAt: new Date().toISOString()});
