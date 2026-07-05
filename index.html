@@ -411,7 +411,7 @@ async function saveSettingsToSupabase() {
       user_id: userId,
       settings: appSettings,
       updated_at: new Date().toISOString()
-    });
+    }, '?on_conflict=user_id');
   } catch(e) { console.warn('settings save error', e); }
 }
 
