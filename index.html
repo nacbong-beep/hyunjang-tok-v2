@@ -5506,16 +5506,15 @@ function renderPersonalCalendar() {
             const isOffDay = [...allDayCustom, ...dayPersonalEvs].some(e => /^휴무/.test(e.title?.trim()));
             const isWorkSat = allDayCustom.some(e => /^근무/.test(e.title?.trim())) && date.getDay() === 6;
             const holiday = appSettings.showHoliday !== false ? getHoliday(y, mo, date.getDate()) : null;
-            const visibleEvs = dayEvs.filter(e => !/^휴무/.test(e.title?.trim()));
-            return `<div class="cal-cell ${isToday?'today':''} ${isSun?'sunday':''} ${holiday?'holiday':''} ${isOffDay?'off-day':''} ${visibleEvs.length&&!isOffDay?'has-custom':''}" data-dk="${dk}" onclick="openPersonalEventModal('${dk}')">
+            return `<div class="cal-cell ${isToday?'today':''} ${isSun?'sunday':''} ${holiday?'holiday':''} ${isOffDay?'off-day':''} ${dayEvs.length?'has-custom':''}" data-dk="${dk}" onclick="openPersonalEventModal('${dk}')">
               <div class="cal-date" style="${isOffDay?'color:#ef4444':''}">
                 <span>${date.getDate()}</span>
                 ${isOffDay?'<span style="font-size:11px;color:#ef4444;font-weight:900;margin-left:3px">휴무</span>':''}
                 ${isWorkSat?'<span style="font-size:11px;color:#0f766e;font-weight:900;margin-left:3px">근무</span>':''}
                 ${holiday?`<span class="holiday-name" style="display:inline;margin-left:3px">${holiday}</span>`:''}
               </div>
-              ${visibleEvs.slice(0,3).map(e=>`<span class="cal-event custom-ev" onclick="event.stopPropagation();openPersonalEventModal('${dk}','${e.id}')" style="${e.color?'background:'+e.color+'22;color:'+e.color:''}">${e.title}</span>`).join('')}
-              ${visibleEvs.length>3?`<span class="cal-more">+${visibleEvs.length-3}</span>`:''}
+              ${dayEvs.slice(0,3).map(e=>`<span class="cal-event custom-ev" onclick="event.stopPropagation();openPersonalEventModal('${dk}','${e.id}')" style="${e.color?'background:'+e.color+'22;color:'+e.color:''}">${e.title}</span>`).join('')}
+              ${dayEvs.length>3?`<span class="cal-more">+${dayEvs.length-3}</span>`:''}
             </div>`;
           }).join('')}
         </div>
@@ -6597,16 +6596,16 @@ function renderPersonalCalendar() {
             const isOffDay = [...allDayCustom, ...dayPersonalEvs].some(e => /^휴무/.test(e.title?.trim()));
             const isWorkSat = allDayCustom.some(e => /^근무/.test(e.title?.trim())) && date.getDay() === 6;
             const holiday = appSettings.showHoliday !== false ? getHoliday(y, mo, date.getDate()) : null;
-            const visibleEvs = dayEvs.filter(e => (!e.end_date||e.end_date===e.date) && !/^휴무/.test(e.title?.trim()));
-            return `<div class="cal-cell ${isToday?'today':''} ${isSun?'sunday':''} ${holiday?'holiday':''} ${isOffDay?'off-day':''} ${visibleEvs.length&&!isOffDay?'has-custom':''}" data-dk="${dk}" onclick="openPersonalEventModal('${dk}')">
+            const singleEvs = dayEvs.filter(e => !e.end_date||e.end_date===e.date);
+            return `<div class="cal-cell ${isToday?'today':''} ${isSun?'sunday':''} ${holiday?'holiday':''} ${isOffDay?'off-day':''} ${singleEvs.length?'has-custom':''}" data-dk="${dk}" onclick="openPersonalEventModal('${dk}')">
               <div class="cal-date" style="${isOffDay?'color:#ef4444':''}">
                 <span>${date.getDate()}</span>
                 ${isOffDay?'<span style="font-size:11px;color:#ef4444;font-weight:900;margin-left:3px">휴무</span>':''}
                 ${isWorkSat?'<span style="font-size:11px;color:#0f766e;font-weight:900;margin-left:3px">근무</span>':''}
                 ${holiday?`<span class="holiday-name" style="display:inline;margin-left:3px">${holiday}</span>`:''}
               </div>
-              ${visibleEvs.slice(0,3).map(e=>`<span class="cal-event custom-ev" onclick="event.stopPropagation();openPersonalEventModal('${dk}','${e.id}')" style="${e.color?'background:'+e.color+'22;color:'+e.color:''}">${e.title}</span>`).join('')}
-              ${visibleEvs.length>3?`<span class="cal-more">+${visibleEvs.length-3}</span>`:''}
+              ${singleEvs.slice(0,3).map(e=>`<span class="cal-event custom-ev" onclick="event.stopPropagation();openPersonalEventModal('${dk}','${e.id}')" style="${e.color?'background:'+e.color+'22;color:'+e.color:''}">${e.title}</span>`).join('')}
+              ${singleEvs.length>3?`<span class="cal-more">+${singleEvs.length-3}</span>`:''}
             </div>`;
           }).join('')}
         </div>
