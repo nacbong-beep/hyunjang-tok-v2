@@ -5372,11 +5372,29 @@ async function confirmSavePersonalEvent(editId) {
   const colorEl = modal?.querySelector('div[data-color][style*="outline:2.5px"]') || modal?.querySelector('div[data-color]');
   const color = modal?._getSelectedColor?.() || colorEl?.dataset.color || '#3b82f6';
   if(!title || !date) { showToast('제목과 날짜를 입력해주세요.'); return; }
+
+  const isOffDay = /^휴무/.test(title.trim());
+
   if(editId) {
     await updatePersonalEvent(editId, { title, date, end_date, memo, color });
+    // 휴무면 customEvents도 업데이트
+    if(isOffDay) {
+      const existing = customEvents.find(e => /^휴무/.test(e.title?.trim()) && e.date === date);
+      if(existing) {
+        customEvents = customEvents.map(e => e.id === existing.id ? {...e, title, date, endDate: end_date||null, memo} : e);
+      } else {
+        customEvents.push({id:uid(), title, date, endDate: end_date||null, tag:'일정', color:'#ef4444', memo, createdAt: new Date().toISOString()});
+      }
+      save(); saveCustomEventsToSupabase();
+    }
     showToast('✅ 수정됐어요.');
   } else {
     await savePersonalEvent({ title, date, end_date, memo, color });
+    // 휴무면 customEvents에도 동시 저장
+    if(isOffDay) {
+      customEvents.push({id:uid(), title, date, endDate: end_date||null, tag:'일정', color:'#ef4444', memo, createdAt: new Date().toISOString()});
+      save(); saveCustomEventsToSupabase();
+    }
     showToast('✅ 추가됐어요.');
   }
   modal?.remove();
@@ -5385,8 +5403,18 @@ async function confirmSavePersonalEvent(editId) {
 
 async function confirmDeletePersonalEvent(id) {
   if(!confirm('이 일정을 삭제할까요?')) return;
+  const ev = personalEvents.find(e => e.id === id);
   document.getElementById('personal-event-modal')?.remove();
   await deletePersonalEvent(id);
+  // 휴무였으면 customEvents에서도 같은 날짜 휴무 삭제
+  if(ev && /^휴무/.test(ev.title?.trim())) {
+    const target = customEvents.find(e => /^휴무/.test(e.title?.trim()) && e.date === ev.date);
+    if(target) {
+      customEvents = customEvents.filter(e => e.id !== target.id);
+      save(); saveCustomEventsToSupabase();
+      sbFetch('custom_events', 'DELETE', null, `?id=eq.${target.id}`).catch(e=>console.error(e));
+    }
+  }
   showToast('🗑️ 삭제됐어요.');
   renderPersonalView(document.getElementById('main-content'));
 }
@@ -5465,18 +5493,20 @@ function renderPersonalCalendar() {
             const isToday = isSameDay(date, new Date());
             const isSun = i % 7 === 0;
             const allDayCustom = getCustomEventsForDate(dk);
-            const isOffDay = allDayCustom.some(e => /^휴무/.test(e.title?.trim()));
+            const dayPersonalEvs = personalEvents.filter(e => e.date === dk);
+            const isOffDay = [...allDayCustom, ...dayPersonalEvs].some(e => /^휴무/.test(e.title?.trim()));
             const isWorkSat = allDayCustom.some(e => /^근무/.test(e.title?.trim())) && date.getDay() === 6;
             const holiday = appSettings.showHoliday !== false ? getHoliday(y, mo, date.getDate()) : null;
-            return `<div class="cal-cell ${isToday?'today':''} ${isSun?'sunday':''} ${holiday?'holiday':''} ${isOffDay?'off-day':''} ${dayEvs.length&&!isOffDay?'has-custom':''}" data-dk="${dk}" onclick="openPersonalEventModal('${dk}')">
+            const visibleEvs = dayEvs.filter(e => !/^휴무/.test(e.title?.trim()));
+            return `<div class="cal-cell ${isToday?'today':''} ${isSun?'sunday':''} ${holiday?'holiday':''} ${isOffDay?'off-day':''} ${visibleEvs.length&&!isOffDay?'has-custom':''}" data-dk="${dk}" onclick="openPersonalEventModal('${dk}')">
               <div class="cal-date" style="${isOffDay?'color:#ef4444':''}">
                 <span>${date.getDate()}</span>
                 ${isOffDay?'<span style="font-size:11px;color:#ef4444;font-weight:900;margin-left:3px">휴무</span>':''}
                 ${isWorkSat?'<span style="font-size:11px;color:#0f766e;font-weight:900;margin-left:3px">근무</span>':''}
                 ${holiday?`<span class="holiday-name" style="display:inline;margin-left:3px">${holiday}</span>`:''}
               </div>
-              ${dayEvs.slice(0,3).map(e=>`<span class="cal-event custom-ev" onclick="event.stopPropagation();openPersonalEventModal('${dk}','${e.id}')" style="${e.color?'background:'+e.color+'22;color:'+e.color:''}">${e.title}</span>`).join('')}
-              ${dayEvs.length>3?`<span class="cal-more">+${dayEvs.length-3}</span>`:''}
+              ${visibleEvs.slice(0,3).map(e=>`<span class="cal-event custom-ev" onclick="event.stopPropagation();openPersonalEventModal('${dk}','${e.id}')" style="${e.color?'background:'+e.color+'22;color:'+e.color:''}">${e.title}</span>`).join('')}
+              ${visibleEvs.length>3?`<span class="cal-more">+${visibleEvs.length-3}</span>`:''}
             </div>`;
           }).join('')}
         </div>
@@ -6554,18 +6584,20 @@ function renderPersonalCalendar() {
             const isToday = isSameDay(date, new Date());
             const isSun = i % 7 === 0;
             const allDayCustom = getCustomEventsForDate(dk);
-            const isOffDay = allDayCustom.some(e => /^휴무/.test(e.title?.trim()));
+            const dayPersonalEvs = personalEvents.filter(e => e.date === dk);
+            const isOffDay = [...allDayCustom, ...dayPersonalEvs].some(e => /^휴무/.test(e.title?.trim()));
             const isWorkSat = allDayCustom.some(e => /^근무/.test(e.title?.trim())) && date.getDay() === 6;
             const holiday = appSettings.showHoliday !== false ? getHoliday(y, mo, date.getDate()) : null;
-            return `<div class="cal-cell ${isToday?'today':''} ${isSun?'sunday':''} ${holiday?'holiday':''} ${isOffDay?'off-day':''} ${dayEvs.length&&!isOffDay?'has-custom':''}" data-dk="${dk}" onclick="openPersonalEventModal('${dk}')">
+            const visibleEvs = dayEvs.filter(e => (!e.end_date||e.end_date===e.date) && !/^휴무/.test(e.title?.trim()));
+            return `<div class="cal-cell ${isToday?'today':''} ${isSun?'sunday':''} ${holiday?'holiday':''} ${isOffDay?'off-day':''} ${visibleEvs.length&&!isOffDay?'has-custom':''}" data-dk="${dk}" onclick="openPersonalEventModal('${dk}')">
               <div class="cal-date" style="${isOffDay?'color:#ef4444':''}">
                 <span>${date.getDate()}</span>
                 ${isOffDay?'<span style="font-size:11px;color:#ef4444;font-weight:900;margin-left:3px">휴무</span>':''}
                 ${isWorkSat?'<span style="font-size:11px;color:#0f766e;font-weight:900;margin-left:3px">근무</span>':''}
                 ${holiday?`<span class="holiday-name" style="display:inline;margin-left:3px">${holiday}</span>`:''}
               </div>
-              ${dayEvs.filter(e=>!e.end_date||e.end_date===e.date).slice(0,3).map(e=>`<span class="cal-event custom-ev" onclick="event.stopPropagation();openPersonalEventModal('${dk}','${e.id}')" style="${e.color?'background:'+e.color+'22;color:'+e.color:''}">${e.title}</span>`).join('')}
-              ${dayEvs.filter(e=>!e.end_date||e.end_date===e.date).length>3?`<span class="cal-more">+${dayEvs.length-3}</span>`:''}
+              ${visibleEvs.slice(0,3).map(e=>`<span class="cal-event custom-ev" onclick="event.stopPropagation();openPersonalEventModal('${dk}','${e.id}')" style="${e.color?'background:'+e.color+'22;color:'+e.color:''}">${e.title}</span>`).join('')}
+              ${visibleEvs.length>3?`<span class="cal-more">+${visibleEvs.length-3}</span>`:''}
             </div>`;
           }).join('')}
         </div>
@@ -7386,13 +7418,19 @@ function saveCustomEvent() {
   else if(currentView==='dashboard') renderDashboard(el);
 }
 
-function deleteCustomEvent() {
+async function deleteCustomEvent() {
   if(!editingEventId) return;
   if(!confirm('이 일정을 삭제할까요?')) return;
   const delId = editingEventId;
+  const delEv = customEvents.find(e => e.id === delId);
   customEvents = customEvents.filter(e=>e.id!==delId);
   save();
   sbFetch('custom_events', 'DELETE', null, `?id=eq.${delId}`).catch(e=>console.error(e));
+  // 휴무면 personal_events에서도 같은 날짜 휴무 삭제
+  if(delEv && /^휴무/.test(delEv.title?.trim())) {
+    const target = personalEvents.find(e => /^휴무/.test(e.title?.trim()) && e.date === delEv.date);
+    if(target) await deletePersonalEvent(target.id);
+  }
   closeEventModal();
   showToast('🗑️ 일정이 삭제됐어요');
   const el = document.getElementById('main-content');
