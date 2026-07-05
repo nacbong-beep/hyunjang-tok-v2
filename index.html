@@ -5393,13 +5393,21 @@ async function confirmSavePersonalEvent(editId) {
     await savePersonalEvent({ title, date, end_date, memo, color: finalColor });
     // 휴무면 customEvents에도 동시 저장
     if(isOffDay) {
-      customEvents.push({id:uid(), title, date, endDate: end_date||null, tag:'일정', color:'#ef4444', memo, createdAt: new Date().toISOString()});
-      save(); saveCustomEventsToSupabase();
+      const newEv = {id:uid(), title, date, endDate: end_date||null, tag:'일정', color:'#ef4444', memo, createdAt: new Date().toISOString()};
+      customEvents.push(newEv);
+      save();
+      // Supabase에 직접 insert
+      await sbFetch('custom_events', 'POST', [{
+        id: newEv.id, title, date, end_date: end_date||null, tag:'일정', color:'#ef4444', memo, created_at: newEv.createdAt
+      }]);
     }
     showToast('✅ 추가됐어요.');
   }
   modal?.remove();
-  renderPersonalView(document.getElementById('main-content'));
+  // 업무캘린더도 갱신 (휴무 연동)
+  if(currentView === 'calendar') renderCalendarView(document.getElementById('main-content'));
+  else if(currentView === 'dashboard') renderDashboard(document.getElementById('main-content'));
+  else renderPersonalView(document.getElementById('main-content'));
 }
 
 async function confirmDeletePersonalEvent(id) {
