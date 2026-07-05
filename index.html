@@ -337,12 +337,16 @@ async function sbFetch(table, method='GET', body=null, query='') {
 
 async function loadFromSupabase() {
   try {
+    const token = localStorage.getItem('hj_token');
+    let userId = null;
+    try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
+
     const [dbRooms, dbMsgs, dbTodos, dbCustomEvents, dbSettings] = await Promise.all([
       sbFetch('rooms', 'GET', null, '?order=sort_order'),
       sbFetch('messages', 'GET', null, '?order=created_at.desc'),
       sbFetch('todos', 'GET', null, '?order=created_at.desc'),
       sbFetch('custom_events', 'GET', null, '?order=date'),
-      sbFetch('user_settings', 'GET', null, '?select=settings&limit=1'),
+      userId ? sbFetch('user_settings', 'GET', null, `?user_id=eq.${userId}&select=settings&limit=1`) : Promise.resolve(null),
     ]);
     if (dbRooms) rooms = dbRooms.map(r=>({id:r.id,name:r.name,favorite:r.favorite,archived:r.archived,sortOrder:r.sort_order}));
     if (dbMsgs) messages = dbMsgs.map(m=>({id:m.id,roomName:m.room_name,tag:m.tag,sender:m.sender,summary:m.summary,content:m.content,messageDate:m.message_date,eventDate:m.event_date,createdAt:m.created_at,isTodo:m.is_todo}));
@@ -399,7 +403,12 @@ async function saveCustomEventsToSupabase() {
 
 async function saveSettingsToSupabase() {
   try {
+    const token = localStorage.getItem('hj_token');
+    let userId = null;
+    try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
+    if(!userId) return;
     await sbFetch('user_settings', 'POST', {
+      user_id: userId,
       settings: appSettings,
       updated_at: new Date().toISOString()
     });
@@ -408,7 +417,11 @@ async function saveSettingsToSupabase() {
 
 async function loadSettingsFromSupabase() {
   try {
-    const rows = await sbFetch('user_settings', 'GET', null, '?select=settings&limit=1');
+    const token = localStorage.getItem('hj_token');
+    let userId = null;
+    try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
+    if(!userId) return;
+    const rows = await sbFetch('user_settings', 'GET', null, `?user_id=eq.${userId}&select=settings&limit=1`);
     if(!rows || !rows.length || !rows[0].settings) return;
     appSettings = {...appSettings, ...rows[0].settings};
     localStorage.setItem('hj3_settings', JSON.stringify(appSettings));
@@ -487,7 +500,7 @@ function todayKey() {
   const kst = new Date(now.getTime() + 9*60*60*1000);
   return kst.toISOString().slice(0,10);
 }
-function addDaysKey(n) { const d = new Date(); d.setDate(d.getDate()+n); return dateKey(d); }
+function addDaysKey(n) { const now = new Date(); const kst = new Date(now.getTime() + 9*60*60*1000); kst.setDate(kst.getDate()+n); return dateKey(kst); }
 function dateKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function isSameDay(a,b) { return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate(); }
 function formatDate(v) {
