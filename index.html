@@ -6037,7 +6037,7 @@ async function extractLocationFromImage(file) {
             { text: '이 사진에서 동/호수 위치 정보 텍스트를 찾아주세요. "302동 903호" 또는 "1동 101호 거실" 같은 형식입니다. 동 번호, 호수, 공간명(거실/안방/주방 등)을 각각 JSON으로만 응답하세요. 예: {"building":"302동","unit":"903호","space":"거실"} 위치 정보가 없으면 {}만 응답하세요.' }
           ]
         }],
-        generationConfig: { temperature: 0, maxOutputTokens: 100 }
+        generationConfig: { temperature: 0, maxOutputTokens: 500 }
       })
     });
     const data = await response.json();
