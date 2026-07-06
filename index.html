@@ -5773,7 +5773,7 @@ async function handleAfterImageReupload(e, punchId) {
   e.target.value = '';
 }
 
-
+async function uploadPunchImage(file) {
   const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
   const baseName = `punch_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const filePath = `${baseName}.jpg`;
