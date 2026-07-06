@@ -6034,7 +6034,7 @@ async function extractLocationFromImage(file) {
         contents: [{
           parts: [
             { inline_data: { mime_type: file.type || 'image/jpeg', data: base64 } },
-            { text: '이 사진에서 동/호수 위치 정보 텍스트를 찾아주세요. "302동 903호" 또는 "1동 101호 거실" 같은 형식입니다. 동 번호, 호수, 공간명(거실/안방/주방 등)을 각각 JSON으로만 응답하세요. 예: {"building":"302동","unit":"903호","space":"거실"} 위치 정보가 없으면 {}만 응답하세요.' }
+            { text: '이 사진에서 위치 정보와 불량 내용 텍스트를 찾아주세요. 위치는 "302동 903호" 또는 "1동 101호 거실" 같은 형식입니다. 동 번호, 호수, 공간명(거실/안방/주방 등), 불량내용을 JSON으로만 응답하세요. 예: {"building":"302동","unit":"903호","space":"거실","description":"발코니 니탄간 미장"} 없는 항목은 null로 응답하세요. 다른 텍스트 없이 JSON만 응답하세요.' }
           ]
         }],
         generationConfig: { temperature: 0, maxOutputTokens: 500 }
@@ -6060,7 +6060,8 @@ async function extractLocationFromImage(file) {
     if(loc.building) { const el = document.getElementById('punch-building'); if(el && !el.value) el.value = loc.building; }
     if(loc.unit) { const el = document.getElementById('punch-unit'); if(el && !el.value) el.value = loc.unit; }
     if(loc.space) { const el = document.getElementById('punch-space'); if(el && !el.value) el.value = loc.space; }
-    if(loc.building || loc.unit) showToast('📍 위치 자동 입력됐어요!');
+    if(loc.description) { const el = document.getElementById('punch-desc'); if(el && !el.value) el.value = loc.description; }
+    if(loc.building || loc.unit || loc.description) showToast('📍 위치/내용 자동 입력됐어요!');
   } catch(e) { console.warn('위치 인식 실패:', e); }
 }
 
