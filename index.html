@@ -294,6 +294,7 @@ body.is-mobile-device .dash-ai-bar{display:none!important}
   .summary-card-icon{font-size:16px;margin-bottom:4px}
   .header-title{max-width:150px;font-size:12px}
   .btn-primary{padding:6px 8px;font-size:11px}
+  .settings-grid{grid-template-columns:1fr!important;}
 }
 </style>
 </head>
@@ -3930,7 +3931,7 @@ function renderInspectionList(el) {
   el.innerHTML = `
     <div style="max-width:900px;margin:0 auto;padding:0 0 40px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <h2 style="font-size:18px;font-weight:700;color:var(--text)">📋 검측요청서</h2>
+        <div></div>
         <button onclick="openCreateFolderModal()" style="background:var(--primary);color:#fff;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">+ 새 검측 폴더</button>
       </div>
       <input id="folder-search-input" class="modal-input" placeholder="검측 이름 검색..." style="margin-bottom:16px" oninput="filterFolderList(this.value)">
@@ -6951,76 +6952,140 @@ function deletePunchContractor(name) {
 
 function renderSettingsView(el) {
   el.innerHTML = `
-    <div style="max-width:640px;display:flex;flex-direction:column;gap:16px">
+    <div style="max-width:900px;display:flex;flex-direction:column;gap:16px">
 
-      <!-- 사이드바 메뉴 순서 -->
+      <!-- 2열 그리드 -->
+      <div class="settings-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+
+        <!-- 기본 설정 -->
+        <div class="panel">
+          <div class="panel-head"><div class="panel-title">🏗️ 현장 정보</div></div>
+          <label class="field-label">현장명
+            <input class="field-control" id="set-site" placeholder="현장명" value="${appSettings.siteName||''}">
+          </label>
+          <button class="btn-primary" style="margin-top:12px" onclick="saveProfileSettings()">저장</button>
+        </div>
+
+        <!-- 캘린더 / 대시보드 -->
+        <div class="panel">
+          <div class="panel-head"><div class="panel-title">📅 캘린더 / 대시보드</div></div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <label class="field-label">주 시작 요일
+              <select class="field-control" id="set-weekstart" onchange="saveCalSettings()">
+                <option value="0" ${appSettings.calWeekStart===0?'selected':''}>일요일</option>
+                <option value="1" ${appSettings.calWeekStart===1?'selected':''}>월요일</option>
+              </select>
+            </label>
+            <label class="field-label" style="flex-direction:row;align-items:center;gap:10px;cursor:pointer">
+              <input type="checkbox" id="set-holiday" ${appSettings.showHoliday?'checked':''} onchange="saveCalSettings()" style="width:16px;height:16px">
+              공휴일 표시
+            </label>
+            <label class="field-label">다가오는 일정 범위
+              <select class="field-control" id="set-upcoming" onchange="saveCalSettings()">
+                <option value="7" ${appSettings.upcomingDays===7?'selected':''}>1주일</option>
+                <option value="14" ${appSettings.upcomingDays===14?'selected':''}>2주일</option>
+                <option value="30" ${appSettings.upcomingDays===30?'selected':''}>1개월</option>
+                <option value="999" ${appSettings.upcomingDays===999?'selected':''}>전체</option>
+              </select>
+            </label>
+            <label class="field-label">지시사항 기준
+              <select class="field-control" id="set-missed" onchange="saveDashSettings()">
+                <option value="1" ${appSettings.missedDays===1?'selected':''}>오늘 하루</option>
+                <option value="3" ${appSettings.missedDays===3?'selected':''}>최근 3일</option>
+                <option value="7" ${appSettings.missedDays===7?'selected':''}>최근 1주일</option>
+              </select>
+            </label>
+          </div>
+        </div>
+
+        <!-- 펀치리스트 공종 -->
+        <div class="panel">
+          <div class="panel-head"><div class="panel-title">📌 펀치리스트 공종</div></div>
+          <div id="punch-cat-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+            ${(appSettings.punchCategories || PUNCH_CATS_DEFAULT).map(cat => `
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
+                <span style="flex:1;font-size:13px;color:var(--text)">${cat}</span>
+                <button onclick="deletePunchCat('${cat}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>
+              </div>
+            `).join('')}
+          </div>
+          <div style="display:flex;gap:8px">
+            <input id="new-punch-cat" class="modal-input" placeholder="새 공종 이름" style="flex:1">
+            <button class="btn-primary" onclick="addPunchCat()" style="padding:8px 14px;white-space:nowrap">추가</button>
+          </div>
+        </div>
+
+        <!-- 협력사 관리 -->
+        <div class="panel">
+          <div class="panel-head"><div class="panel-title">🏢 협력사 관리</div></div>
+          <div id="punch-contractor-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+            ${(appSettings.punchContractors || []).length ? (appSettings.punchContractors || []).map(c => `
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
+                <span style="flex:1;font-size:13px;color:var(--text)">${c}</span>
+                <button onclick="deletePunchContractor('${c}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>
+              </div>
+            `).join('') : '<div style="font-size:12px;color:var(--muted)">등록된 협력사가 없어요.</div>'}
+          </div>
+          <div style="display:flex;gap:8px">
+            <input id="new-punch-contractor" class="modal-input" placeholder="협력사 이름" style="flex:1">
+            <button class="btn-primary" onclick="addPunchContractor()" style="padding:8px 14px;white-space:nowrap">추가</button>
+          </div>
+        </div>
+
+        <!-- 개인노트 카테고리 -->
+        <div class="panel">
+          <div class="panel-head"><div class="panel-title">📒 개인노트 카테고리</div></div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">삭제 시 해당 카테고리 노트는 "메모"로 변경됩니다.</div>
+          <div id="personal-cat-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+            ${(appSettings.personalCategories || ['투자기록','쇼핑목록','할일','약속','메모']).map(cat => `
+              <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
+                <span style="flex:1;font-size:13px;color:var(--text)">${cat}</span>
+                <button onclick="deletePersonalCat('${cat}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>
+              </div>
+            `).join('')}
+          </div>
+          <div style="display:flex;gap:8px">
+            <input id="new-personal-cat" class="modal-input" placeholder="새 카테고리 이름" style="flex:1">
+            <button class="btn-primary" onclick="addPersonalCat()" style="padding:8px 14px;white-space:nowrap">추가</button>
+          </div>
+        </div>
+
+        <!-- AI 설정 -->
+        <div class="panel">
+          <div class="panel-head"><div class="panel-title">🤖 AI 분류 엔진</div></div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;gap:8px">
+              <button id="ai-btn-claude" onclick="setAiEngine('claude')" style="flex:1;padding:10px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${aiEngine==='claude'?'var(--primary)':'var(--border2)'};background:${aiEngine==='claude'?'#f0f0ff':'var(--surface)'};color:${aiEngine==='claude'?'var(--primary)':'var(--muted)'}">
+                Claude (기본)
+              </button>
+              <button id="ai-btn-gemini" onclick="setAiEngine('gemini')" style="flex:1;padding:10px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${aiEngine==='gemini'?'#1a73e8':'var(--border2)'};background:${aiEngine==='gemini'?'#e8f0fe':'var(--surface)'};color:${aiEngine==='gemini'?'#1a73e8':'var(--muted)'}">
+                Gemini (테스트)
+              </button>
+            </div>
+            <div id="gemini-key-section" style="display:${aiEngine==='gemini'?'block':'none'}">
+              <label class="field-label">Gemini API 키
+                <input class="field-control" id="set-gemini-key" placeholder="AIza..." value="${geminiApiKey}" type="password">
+              </label>
+              <div style="display:flex;gap:8px;margin-top:8px">
+                <button class="btn-primary" style="flex:1" onclick="saveGeminiKey()">저장</button>
+                <button class="btn-ghost" style="flex:1" onclick="checkGeminiModels()">사용 가능 모델 확인</button>
+              </div>
+              <div id="gemini-models-result" style="margin-top:8px;font-size:11px;color:var(--muted);max-height:150px;overflow-y:auto"></div>
+            </div>
+            <div style="font-size:11px;color:var(--muted)">현재: ${aiEngine==='claude'?'Claude Haiku (AI 분류 + AI 검색)':'Gemini Flash (AI 분류 + AI 검색)'}</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- 풀 width: 사이드바 메뉴 순서 -->
       <div class="panel">
         <div class="panel-head"><div class="panel-title">📑 사이드바 메뉴 순서</div></div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:10px">⠿ 핸들을 드래그해서 순서를 바꿀 수 있어요</div>
         <div id="menu-order-list" style="display:flex;flex-direction:column;gap:4px"></div>
       </div>
 
-      <!-- AI 엔진 설정 -->
-      <div class="panel">
-        <div class="panel-head"><div class="panel-title">🤖 AI 분류 엔진</div></div>
-        <div style="display:flex;flex-direction:column;gap:12px">
-          <div style="display:flex;gap:8px">
-            <button id="ai-btn-claude" onclick="setAiEngine('claude')" style="flex:1;padding:10px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${aiEngine==='claude'?'var(--primary)':'var(--border2)'};background:${aiEngine==='claude'?'#f0f0ff':'var(--surface)'};color:${aiEngine==='claude'?'var(--primary)':'var(--muted)'}">
-              Claude (기본)
-            </button>
-            <button id="ai-btn-gemini" onclick="setAiEngine('gemini')" style="flex:1;padding:10px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;border:2px solid ${aiEngine==='gemini'?'#1a73e8':'var(--border2)'};background:${aiEngine==='gemini'?'#e8f0fe':'var(--surface)'};color:${aiEngine==='gemini'?'#1a73e8':'var(--muted)'}">
-              Gemini (테스트)
-            </button>
-          </div>
-          <div id="gemini-key-section" style="display:${aiEngine==='gemini'?'block':'none'}">
-            <label class="field-label">Gemini API 키
-              <input class="field-control" id="set-gemini-key" placeholder="AIza..." value="${geminiApiKey}" type="password">
-            </label>
-            <div style="display:flex;gap:8px;margin-top:8px">
-              <button class="btn-primary" style="flex:1" onclick="saveGeminiKey()">저장</button>
-              <button class="btn-ghost" style="flex:1" onclick="checkGeminiModels()">사용 가능 모델 확인</button>
-            </div>
-            <div id="gemini-models-result" style="margin-top:8px;font-size:11px;color:var(--muted);max-height:150px;overflow-y:auto"></div>
-          </div>
-          <div style="font-size:11px;color:var(--muted)">현재: ${aiEngine==='claude'?'Claude Haiku (AI 분류 + AI 검색)':'Gemini Flash (AI 분류 + AI 검색)'}</div>
-        </div>
-      </div>
-
-      <!-- 펀치리스트 공종 관리 -->
-      <div class="panel">
-        <div class="panel-head"><div class="panel-title">📌 펀치리스트 공종 관리</div></div>
-        <div id="punch-cat-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-          ${(appSettings.punchCategories || PUNCH_CATS_DEFAULT).map(cat => `
-            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
-              <span style="flex:1;font-size:13px;color:var(--text)">${cat}</span>
-              <button onclick="deletePunchCat('${cat}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>
-            </div>
-          `).join('')}
-        </div>
-        <div style="display:flex;gap:8px">
-          <input id="new-punch-cat" class="modal-input" placeholder="새 공종 이름" style="flex:1">
-          <button class="btn-primary" onclick="addPunchCat()" style="padding:8px 14px;white-space:nowrap">추가</button>
-        </div>
-      </div>
-
-      <!-- 펀치리스트 협력사 관리 -->
-      <div class="panel">
-        <div class="panel-head"><div class="panel-title">🏢 협력사 관리</div></div>
-        <div id="punch-contractor-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-          ${(appSettings.punchContractors || []).length ? (appSettings.punchContractors || []).map(c => `
-            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
-              <span style="flex:1;font-size:13px;color:var(--text)">${c}</span>
-              <button onclick="deletePunchContractor('${c}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>
-            </div>
-          `).join('') : '<div style="font-size:12px;color:var(--muted)">등록된 협력사가 없어요.</div>'}
-        </div>
-        <div style="display:flex;gap:8px">
-          <input id="new-punch-contractor" class="modal-input" placeholder="협력사 이름" style="flex:1">
-          <button class="btn-primary" onclick="addPunchContractor()" style="padding:8px 14px;white-space:nowrap">추가</button>
-        </div>
-      </div>
-
-      <!-- 기존 도면 썸네일 생성 -->
+      <!-- 풀 width: 도면 썸네일 -->
       <div class="panel">
         <div class="panel-head"><div class="panel-title">🖼️ 기존 도면 썸네일 생성</div></div>
         <div style="font-size:12px;color:var(--muted);margin-bottom:12px;line-height:1.6">Image Transformation 없이도 작은 용량 썸네일을 표시하기 위해, 기존 도면들의 작은 썸네일 파일을 미리 만들어둬요. 한 번만 실행하면 됩니다.</div>
@@ -7034,73 +7099,7 @@ function renderSettingsView(el) {
         </div>
       </div>
 
-      <!-- 개인노트 카테고리 -->
-      <div class="panel">
-        <div class="panel-head"><div class="panel-title">📒 개인노트 카테고리</div></div>
-        <div style="font-size:12px;color:var(--muted);margin-bottom:12px">카테고리를 추가하거나 삭제할 수 있어요. 삭제 시 해당 카테고리의 노트는 "메모"로 변경됩니다.</div>
-        <div id="personal-cat-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-          ${(appSettings.personalCategories || ['투자기록','쇼핑목록','할일','약속','메모']).map((cat,i) => `
-            <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
-              <span style="flex:1;font-size:13px;color:var(--text)">${cat}</span>
-              <button onclick="deletePersonalCat('${cat}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>
-            </div>
-          `).join('')}
-        </div>
-        <div style="display:flex;gap:8px">
-          <input id="new-personal-cat" class="modal-input" placeholder="새 카테고리 이름" style="flex:1">
-          <button class="btn-primary" onclick="addPersonalCat()" style="padding:8px 14px;white-space:nowrap">추가</button>
-        </div>
-      </div>
-
-      <!-- 현장/프로필 정보 -->
-      <div class="panel">
-        <div class="panel-head"><div class="panel-title">🏗️ 현장 정보</div></div>
-        <label class="field-label">현장명
-          <input class="field-control" id="set-site" placeholder="현장명" value="${appSettings.siteName||''}">
-        </label>
-        <button class="btn-primary" style="margin-top:12px" onclick="saveProfileSettings()">저장</button>
-      </div>
-
-      <!-- 캘린더 설정 -->
-      <div class="panel">
-        <div class="panel-head"><div class="panel-title">📅 캘린더 설정</div></div>
-        <div style="display:flex;flex-direction:column;gap:12px">
-          <label class="field-label">주 시작 요일
-            <select class="field-control" id="set-weekstart" onchange="saveCalSettings()">
-              <option value="0" ${appSettings.calWeekStart===0?'selected':''}>일요일</option>
-              <option value="1" ${appSettings.calWeekStart===1?'selected':''}>월요일</option>
-            </select>
-          </label>
-          <label class="field-label" style="flex-direction:row;align-items:center;gap:10px;cursor:pointer">
-            <input type="checkbox" id="set-holiday" ${appSettings.showHoliday?'checked':''} onchange="saveCalSettings()" style="width:16px;height:16px">
-            공휴일 표시
-          </label>
-          <label class="field-label">다가오는 일정 표시 범위
-            <select class="field-control" id="set-upcoming" onchange="saveCalSettings()">
-              <option value="7" ${appSettings.upcomingDays===7?'selected':''}>1주일</option>
-              <option value="14" ${appSettings.upcomingDays===14?'selected':''}>2주일</option>
-              <option value="30" ${appSettings.upcomingDays===30?'selected':''}>1개월</option>
-              <option value="999" ${appSettings.upcomingDays===999?'selected':''}>전체</option>
-            </select>
-          </label>
-        </div>
-      </div>
-
-      <!-- 알림/대시보드 설정 -->
-      <div class="panel">
-        <div class="panel-head"><div class="panel-title">📊 대시보드 설정</div></div>
-        <div style="display:flex;flex-direction:column;gap:12px">
-          <label class="field-label">지시사항 기준
-            <select class="field-control" id="set-missed" onchange="saveDashSettings()">
-              <option value="1" ${appSettings.missedDays===1?'selected':''}>오늘 하루</option>
-              <option value="3" ${appSettings.missedDays===3?'selected':''}>최근 3일</option>
-              <option value="7" ${appSettings.missedDays===7?'selected':''}>최근 1주일</option>
-            </select>
-          </label>
-        </div>
-      </div>
-
-      <!-- 데이터 관리 -->
+      <!-- 풀 width: 데이터 관리 -->
       <div class="panel">
         <div class="panel-head"><div class="panel-title">📁 데이터 관리</div></div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
