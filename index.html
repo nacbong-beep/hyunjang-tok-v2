@@ -6017,6 +6017,7 @@ function handlePunchImageSelect(e) {
 
 async function extractLocationFromImage(file) {
   if(!geminiApiKey) return;
+  console.log('위치인식 시작:', file?.name, file?.type);
   try {
     const base64 = await new Promise((res, rej) => {
       const r = new FileReader();
@@ -6038,6 +6039,7 @@ async function extractLocationFromImage(file) {
       })
     });
     const data = await response.json();
+    console.log('Gemini 응답:', JSON.stringify(data).slice(0, 200));
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
     if(!text || text === '{}') return;
     const clean = text.replace(/```json|```/g, '').trim();
