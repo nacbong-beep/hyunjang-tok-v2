@@ -5753,7 +5753,27 @@ async function confirmPunchComplete(id) {
   }
 }
 
-async function uploadPunchImage(file) {
+async function handleAfterImageReupload(e, punchId) {
+  const file = e.target.files?.[0];
+  if(!file || !punchId) return;
+  showToast('⏳ 사진 교체 중...');
+  try {
+    const result = await uploadPunchImage(file);
+    await updatePunchItem(punchId, {
+      after_image_path: result.filePath,
+      after_thumb_path: result.thumbPath
+    });
+    showToast('✅ After 사진이 교체됐어요.');
+    document.getElementById('punch-add-modal')?.remove();
+    renderPunchView(document.getElementById('main-content'));
+  } catch(err) {
+    showToast('❌ 사진 교체 실패');
+    console.error(err);
+  }
+  e.target.value = '';
+}
+
+
   const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
   const baseName = `punch_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const filePath = `${baseName}.jpg`;
@@ -5820,6 +5840,8 @@ function openPunchAddModal(editItem = null) {
           <div>
             <div style="font-size:11px;color:#10b981;margin-bottom:4px;text-align:center;font-weight:600">After ✅</div>
             <img data-path="${editItem.after_thumb_path||editItem.after_image_path}" class="lib-thumb" onclick="openPunchImageViewer('${editItem.after_image_path}')" style="width:100%;height:120px;object-fit:cover;border-radius:8px;border:2px solid #10b981;cursor:zoom-in">
+            <input type="file" id="after-image-reupload" accept="image/*" style="display:none" onchange="handleAfterImageReupload(event,'${editItem.id}')">
+            <button class="btn-ghost" onclick="document.getElementById('after-image-reupload').click()" style="width:100%;margin-top:6px;padding:6px;font-size:11px">🔄 다시 올리기</button>
           </div>
         </div>
       </div>` : ''}
