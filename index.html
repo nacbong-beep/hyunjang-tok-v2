@@ -6033,7 +6033,7 @@ async function extractLocationFromImage(file) {
         contents: [{
           parts: [
             { inline_data: { mime_type: file.type || 'image/jpeg', data: base64 } },
-            { text: '이 사진에서 위치 정보와 불량 내용 텍스트를 찾아주세요. 위치는 "302동 903호" 또는 "1동 101호 거실" 같은 형식입니다. 동 번호, 호수, 공간명(거실/안방/주방 등), 불량내용을 JSON으로만 응답하세요. 반드시 순수 JSON만, 코드블록 없이 응답하세요. 예: {"building":"302동","unit":"903호","space":"거실","description":"발코니 미장 불량"} 없는 항목은 null로 하세요.' }
+            { text: '이 사진에서 위치 정보와 불량 내용 텍스트를 찾아주세요. 위치는 "302동 903호", "302동 1코어 21층", "1동 101호 거실" 같은 형식입니다. 동 번호, 호수 또는 층/코어, 공간명(거실/안방/주방 등), 불량내용을 추출하세요. 반드시 아래 형식의 순수 JSON만 응답하고 다른 텍스트는 절대 포함하지 마세요. {"building":"302동","unit":"1코어 21층","space":null,"description":"배관제거"} 없는 항목은 null로 하세요.' }
           ]
         }],
         generationConfig: { temperature: 0, maxOutputTokens: 500 }
