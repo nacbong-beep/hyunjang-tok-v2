@@ -7008,7 +7008,7 @@ function renderSettingsView(el) {
           <div class="panel-head"><div class="panel-title">📌 펀치리스트 공종</div></div>
           <div style="display:flex;gap:8px;margin-bottom:12px">
             <input id="new-punch-cat" class="modal-input" placeholder="새 공종 이름" style="flex:1">
-            <button class="btn-primary" onclick="addPunchCat()" style="padding:6px 12px;font-size:12px;white-space:nowrap">추가</button>
+            <button class="btn-primary" onclick="addPunchCat()" style="padding:6px 12px;font-size:12px;white-space:nowrap;align-self:center">추가</button>
           </div>
           <div id="punch-cat-list" style="display:flex;flex-wrap:wrap;gap:6px">
             ${(appSettings.punchCategories || PUNCH_CATS_DEFAULT).map(cat => `
@@ -7025,7 +7025,7 @@ function renderSettingsView(el) {
           <div class="panel-head"><div class="panel-title">🏢 협력사 관리</div></div>
           <div style="display:flex;gap:8px;margin-bottom:12px">
             <input id="new-punch-contractor" class="modal-input" placeholder="협력사 이름" style="flex:1">
-            <button class="btn-primary" onclick="addPunchContractor()" style="padding:6px 12px;font-size:12px;white-space:nowrap">추가</button>
+            <button class="btn-primary" onclick="addPunchContractor()" style="padding:6px 12px;font-size:12px;white-space:nowrap;align-self:center">추가</button>
           </div>
           <div id="punch-contractor-list" style="display:flex;flex-wrap:wrap;gap:6px">
             ${(appSettings.punchContractors || []).length ? (appSettings.punchContractors || []).map(c => `
@@ -7040,19 +7040,19 @@ function renderSettingsView(el) {
         <!-- 개인노트 카테고리 -->
         <div class="panel">
           <div class="panel-head"><div class="panel-title">📒 개인노트 카테고리</div></div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:12px">삭제 시 해당 카테고리 노트는 "메모"로 변경됩니다.</div>
-          <div id="personal-cat-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <input id="new-personal-cat" class="modal-input" placeholder="새 카테고리 이름" style="flex:1">
+            <button class="btn-primary" onclick="addPersonalCat()" style="padding:6px 12px;font-size:12px;white-space:nowrap;height:fit-content;align-self:center">추가</button>
+          </div>
+          <div id="personal-cat-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
             ${(appSettings.personalCategories || ['투자기록','쇼핑목록','할일','약속','메모']).map(cat => `
-              <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
-                <span style="flex:1;font-size:13px;color:var(--text)">${cat}</span>
-                <button onclick="deletePersonalCat('${cat}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>
+              <div style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:var(--surface);border:1px solid var(--border2);border-radius:20px;font-size:12px;color:var(--text)">
+                <span>${cat}</span>
+                <button onclick="deletePersonalCat('${cat}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 2px;line-height:1">✕</button>
               </div>
             `).join('')}
           </div>
-          <div style="display:flex;gap:8px">
-            <input id="new-personal-cat" class="modal-input" placeholder="새 카테고리 이름" style="flex:1">
-            <button class="btn-primary" onclick="addPersonalCat()" style="padding:8px 14px;white-space:nowrap">추가</button>
-          </div>
+
         </div>
 
         <!-- AI 설정 -->
