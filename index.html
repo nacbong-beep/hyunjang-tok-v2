@@ -6964,6 +6964,11 @@ function renderSettingsView(el) {
             <input class="field-control" id="set-site" placeholder="현장명" value="${appSettings.siteName||''}">
           </label>
           <button class="btn-primary" style="margin-top:12px" onclick="saveProfileSettings()">저장</button>
+          <div style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border2)">
+            <div style="font-size:11px;color:var(--muted);margin-bottom:6px">로그인 정보</div>
+            <div style="font-size:13px;color:var(--text);margin-bottom:4px">${window._currentUserName||''}</div>
+            <div style="font-size:12px;color:var(--muted)">${window._currentUserEmail||''}</div>
+          </div>
         </div>
 
         <!-- 캘린더 / 대시보드 -->
@@ -7001,7 +7006,11 @@ function renderSettingsView(el) {
         <!-- 펀치리스트 공종 -->
         <div class="panel">
           <div class="panel-head"><div class="panel-title">📌 펀치리스트 공종</div></div>
-          <div id="punch-cat-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <input id="new-punch-cat" class="modal-input" placeholder="새 공종 이름" style="flex:1">
+            <button class="btn-primary" onclick="addPunchCat()" style="padding:8px 14px;white-space:nowrap">추가</button>
+          </div>
+          <div id="punch-cat-list" style="display:flex;flex-direction:column;gap:6px">
             ${(appSettings.punchCategories || PUNCH_CATS_DEFAULT).map(cat => `
               <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
                 <span style="flex:1;font-size:13px;color:var(--text)">${cat}</span>
@@ -7009,26 +7018,22 @@ function renderSettingsView(el) {
               </div>
             `).join('')}
           </div>
-          <div style="display:flex;gap:8px">
-            <input id="new-punch-cat" class="modal-input" placeholder="새 공종 이름" style="flex:1">
-            <button class="btn-primary" onclick="addPunchCat()" style="padding:8px 14px;white-space:nowrap">추가</button>
-          </div>
         </div>
 
         <!-- 협력사 관리 -->
         <div class="panel">
           <div class="panel-head"><div class="panel-title">🏢 협력사 관리</div></div>
-          <div id="punch-contractor-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <input id="new-punch-contractor" class="modal-input" placeholder="협력사 이름" style="flex:1">
+            <button class="btn-primary" onclick="addPunchContractor()" style="padding:8px 14px;white-space:nowrap">추가</button>
+          </div>
+          <div id="punch-contractor-list" style="display:flex;flex-direction:column;gap:6px">
             ${(appSettings.punchContractors || []).length ? (appSettings.punchContractors || []).map(c => `
               <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--surface);border:1px solid var(--border2);border-radius:8px">
                 <span style="flex:1;font-size:13px;color:var(--text)">${c}</span>
                 <button onclick="deletePunchContractor('${c}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px">✕</button>
               </div>
             `).join('') : '<div style="font-size:12px;color:var(--muted)">등록된 협력사가 없어요.</div>'}
-          </div>
-          <div style="display:flex;gap:8px">
-            <input id="new-punch-contractor" class="modal-input" placeholder="협력사 이름" style="flex:1">
-            <button class="btn-primary" onclick="addPunchContractor()" style="padding:8px 14px;white-space:nowrap">추가</button>
           </div>
         </div>
 
@@ -7620,6 +7625,8 @@ async function checkAuth() {
     }
     const user = await res.json();
     if(user.email === ALLOWED_EMAIL) {
+      window._currentUserEmail = user.email;
+      window._currentUserName = user.user_metadata?.full_name || user.email;
       // 45분마다 자동갱신
       setTimeout(autoRefreshToken, 45 * 60 * 1000);
       return true;
