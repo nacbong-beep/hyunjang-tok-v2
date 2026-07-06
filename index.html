@@ -6018,7 +6018,6 @@ function handlePunchImageSelect(e) {
 
 async function extractLocationFromImage(file) {
   if(!geminiApiKey) return;
-  console.log('위치인식 시작:', file?.name, file?.type);
   showToast('📍 위치 정보 인식 중...');
   try {
     const base64 = await new Promise((res, rej) => {
@@ -6034,29 +6033,23 @@ async function extractLocationFromImage(file) {
         contents: [{
           parts: [
             { inline_data: { mime_type: file.type || 'image/jpeg', data: base64 } },
-            { text: '이 사진에서 위치 정보와 불량 내용 텍스트를 찾아주세요. 위치는 "302동 903호" 또는 "1동 101호 거실" 같은 형식입니다. 동 번호, 호수, 공간명(거실/안방/주방 등), 불량내용을 JSON으로만 응답하세요. 예: {"building":"302동","unit":"903호","space":"거실","description":"발코니 니탄간 미장"} 없는 항목은 null로 응답하세요. 다른 텍스트 없이 JSON만 응답하세요.' }
+            { text: '이 사진에서 위치 정보와 불량 내용 텍스트를 찾아주세요. 위치는 "302동 903호" 또는 "1동 101호 거실" 같은 형식입니다. 동 번호, 호수, 공간명(거실/안방/주방 등), 불량내용을 JSON으로만 응답하세요. 반드시 순수 JSON만, 코드블록 없이 응답하세요. 예: {"building":"302동","unit":"903호","space":"거실","description":"발코니 미장 불량"} 없는 항목은 null로 하세요.' }
           ]
         }],
         generationConfig: { temperature: 0, maxOutputTokens: 500 }
       })
     });
     const data = await response.json();
-    console.log('Gemini 응답:', JSON.stringify(data).slice(0, 200));
     if(data.error) {
       if(data.error.code === 429) showToast('⚠️ Gemini 사용량 한도 초과. 잠시 후 다시 시도해 주세요.');
       return;
     }
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    console.log('위치인식 응답 텍스트 전체:', JSON.stringify(text));
     if(!text) return;
-    // 코드블록 제거 후 JSON 추출
     const stripped = text.replace(/```json|```/g, '').trim();
-    console.log('stripped:', stripped);
     const jsonMatch = stripped.match(/\{[\s\S]*?\}/);
-    console.log('jsonMatch:', jsonMatch?.[0]);
     if(!jsonMatch) return;
     const loc = JSON.parse(jsonMatch[0]);
-    console.log('위치 파싱 결과:', loc);
     if(loc.building) { const el = document.getElementById('punch-building'); if(el && !el.value) el.value = loc.building; }
     if(loc.unit) { const el = document.getElementById('punch-unit'); if(el && !el.value) el.value = loc.unit; }
     if(loc.space) { const el = document.getElementById('punch-space'); if(el && !el.value) el.value = loc.space; }
