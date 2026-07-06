@@ -7008,7 +7008,7 @@ function renderSettingsView(el) {
           <div class="panel-head"><div class="panel-title">📌 펀치리스트 공종</div></div>
           <div style="display:flex;gap:8px;margin-bottom:12px">
             <input id="new-punch-cat" class="modal-input" placeholder="새 공종 이름" style="flex:1">
-            <button class="btn-primary" onclick="addPunchCat()" style="padding:8px 14px;white-space:nowrap">추가</button>
+            <button class="btn-primary" onclick="addPunchCat()" style="padding:6px 12px;font-size:12px;white-space:nowrap">추가</button>
           </div>
           <div id="punch-cat-list" style="display:flex;flex-direction:column;gap:6px">
             ${(appSettings.punchCategories || PUNCH_CATS_DEFAULT).map(cat => `
@@ -7025,7 +7025,7 @@ function renderSettingsView(el) {
           <div class="panel-head"><div class="panel-title">🏢 협력사 관리</div></div>
           <div style="display:flex;gap:8px;margin-bottom:12px">
             <input id="new-punch-contractor" class="modal-input" placeholder="협력사 이름" style="flex:1">
-            <button class="btn-primary" onclick="addPunchContractor()" style="padding:8px 14px;white-space:nowrap">추가</button>
+            <button class="btn-primary" onclick="addPunchContractor()" style="padding:6px 12px;font-size:12px;white-space:nowrap">추가</button>
           </div>
           <div id="punch-contractor-list" style="display:flex;flex-direction:column;gap:6px">
             ${(appSettings.punchContractors || []).length ? (appSettings.punchContractors || []).map(c => `
