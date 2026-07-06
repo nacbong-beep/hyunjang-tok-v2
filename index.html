@@ -6047,11 +6047,14 @@ async function extractLocationFromImage(file) {
       return;
     }
     const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim();
-    if(!text || text === '{}') return;
-    // JSON 추출 - 코드블록, 앞뒤 텍스트 제거
-    const jsonMatch = text.match(/\{[^{}]*\}/);
+    console.log('위치인식 응답 텍스트:', text);
+    if(!text) return;
+    // 코드블록 제거 후 JSON 추출
+    const stripped = text.replace(/```json|```/g, '').trim();
+    const jsonMatch = stripped.match(/\{[\s\S]*?\}/);
     if(!jsonMatch) return;
     const loc = JSON.parse(jsonMatch[0]);
+    console.log('위치 파싱 결과:', loc);
     if(loc.building) { const el = document.getElementById('punch-building'); if(el && !el.value) el.value = loc.building; }
     if(loc.unit) { const el = document.getElementById('punch-unit'); if(el && !el.value) el.value = loc.unit; }
     if(loc.space) { const el = document.getElementById('punch-space'); if(el && !el.value) el.value = loc.space; }
