@@ -5935,6 +5935,7 @@ function openPunchAddModal(editItem = null) {
         const file = item.getAsFile();
         if(!file) continue;
         addPunchPendingImage(file);
+        extractLocationFromImage(file);
         showToast('📋 이미지를 붙여넣었어요');
         break;
       }
@@ -6018,6 +6019,7 @@ function handlePunchImageSelect(e) {
 async function extractLocationFromImage(file) {
   if(!geminiApiKey) return;
   console.log('위치인식 시작:', file?.name, file?.type);
+  showToast('📍 위치 정보 인식 중...');
   try {
     const base64 = await new Promise((res, rej) => {
       const r = new FileReader();
@@ -6071,6 +6073,7 @@ async function pastePunchImage() {
           const blob = await item.getType(type);
           const file = new File([blob], `punch_${Date.now()}.png`, { type });
           addPunchPendingImage(file);
+          extractLocationFromImage(file);
           showToast('📋 이미지를 붙여넣었어요');
           return;
         }
