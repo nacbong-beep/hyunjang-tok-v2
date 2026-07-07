@@ -4121,7 +4121,8 @@ function renderInspectionDetail(el) {
         <button onclick="currentInspectionFolder=null;renderInspectionList(document.getElementById('main-content'))" style="background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:6px 12px;font-size:12px;color:var(--muted);cursor:pointer;font-weight:700">← 목록</button>
         <h2 style="font-size:16px;font-weight:700;color:var(--text);flex:1">📁 ${folder.title}</h2>
         <button onclick="openAddDocModal()" style="background:var(--primary);color:#fff;border:none;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer">+ 도면 추가</button>
-        <button onclick="printInspectionFolder('${folder.id}')" style="background:#0f766e;color:#fff;border:none;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer">🖨️ 인쇄</button>
+        <button onclick="toggleAllInspectionSelect()" style="background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;color:var(--text)" id="inspection-select-all-btn">전체 선택</button>
+        <button onclick="printSelectedInspectionItems('${folder.id}')" style="background:#0f766e;color:#fff;border:none;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer">🖨️ 선택 인쇄</button>
       </div>
       ${items.length === 0 ? `
         <div class="empty-box">도면이 없습니다.<br>"도면 추가" 버튼으로 도면/시공관리에서 가져오세요.</div>
@@ -4131,6 +4132,7 @@ function renderInspectionDetail(el) {
             const doc = inspectionDocs.find(d => d.id === item.doc_id);
             return `
             <div class="drag-item" data-id="${item.id}" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:12px" id="iitem-${item.id}">
+              <input type="checkbox" class="inspection-print-check" data-item-id="${item.id}" checked style="width:18px;height:18px;cursor:pointer;flex-shrink:0" title="인쇄 선택">
               <span class="drag-handle" style="font-size:18px;cursor:grab;color:var(--muted);padding:0 4px" title="드래그로 순서 변경">⠿</span>
               <div style="font-size:12px;font-weight:700;color:var(--muted);min-width:20px;text-align:center">${idx+1}</div>
               ${doc ? `<img data-path="${doc.file_path||''}" data-thumb-path="${doc.thumb_path||''}" class="lib-thumb" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border);cursor:pointer" onclick="openInspectionDocView('${doc.id}')" onerror="if(this.dataset.loaded)this.style.display='none'">` : '<div style="width:60px;height:60px;background:var(--surface);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:20px">📄</div>'}
@@ -4293,6 +4295,55 @@ async function moveInspectionItem(itemId, folderId, dir) {
   [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
   await updateInspectionItemOrder(folderId);
   renderInspectionDetail(document.getElementById('main-content'));
+}
+
+function toggleAllInspectionSelect() {
+  const checks = document.querySelectorAll('.inspection-print-check');
+  const allChecked = [...checks].every(c => c.checked);
+  checks.forEach(c => c.checked = !allChecked);
+  document.getElementById('inspection-select-all-btn').textContent = allChecked ? '전체 선택' : '전체 해제';
+}
+
+async function printSelectedInspectionItems(folderId) {
+  const checks = document.querySelectorAll('.inspection-print-check:checked');
+  if(checks.length === 0) { showToast('인쇄할 도면을 선택해 주세요.'); return; }
+  const selectedIds = [...checks].map(c => c.dataset.itemId);
+  const items = (inspectionItems[folderId] || []).filter(item => selectedIds.includes(item.id));
+
+  const signedItems = await Promise.all(items.map(async item => {
+    const doc = inspectionDocs.find(d => d.id === item.doc_id);
+    if(!doc) return null;
+    let url = doc.file_url;
+    try {
+      const filePath = doc.file_path || (doc.file_url ? doc.file_url.split('/library/')[1]?.split('?')[0] : null);
+      if(filePath) url = await getLibraryFileUrl(filePath) || url;
+    } catch(e) {}
+    return { url, paper_size: item.paper_size || 'A4 landscape', title: doc.title };
+  }));
+
+  const validItems = signedItems.filter(Boolean);
+  if(validItems.length === 0) { showToast('인쇄할 도면이 없어요.'); return; }
+
+  const printWin = window.open('', '_blank');
+  const pageStyles = validItems.map((item,i) => {
+    const size = item.paper_size || 'A4 landscape';
+    return `@page p${i}{size:${size};margin:5mm;}.pg${i}{page:p${i};}`;
+  }).join('');
+  const styleStr = `
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:#fff;}
+    .page{display:flex;align-items:center;justify-content:center;break-after:page;width:100%;height:100vh;}
+    .page:last-child{break-after:avoid;}
+    .page img{max-width:100%;max-height:100%;object-fit:contain;}
+    ${pageStyles}
+    @media print{html,body{height:auto;}.page{height:auto;min-height:100vh;}}
+  `;
+  const pagesHtml = validItems.map((item,i) =>
+    `<div class="page pg${i}"><img src="${item.url}" alt="${item.title}"></div>`
+  ).join('');
+  const scriptStr = 'window.onload=function(){setTimeout(function(){window.print();},800);};';
+  printWin.document.write('<!DOCTYPE html><html><head><title>검측요청서</title><style>' + styleStr + '<\/style><\/head><body>' + pagesHtml + '<script>' + scriptStr + '<\/scr' + 'ipt><\/body><\/html>');
+  printWin.document.close();
 }
 
 async function printInspectionFolder(folderId) {
