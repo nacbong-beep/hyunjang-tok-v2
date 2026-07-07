@@ -4363,8 +4363,8 @@ async function printSelectedInspectionItems(folderId) {
         ctx.drawImage(img, -img.naturalWidth/2, -img.naturalHeight/2);
         resolve(canvas.toDataURL('image/jpeg', 0.95));
       };
-      img.onerror = (e) => { console.error('이미지 로드 실패:', url, e); resolve(url); };
-      img.src = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+      img.onerror = () => resolve(url);
+      img.src = url;
     });
   }
   // 회전 이미지 미리 변환
