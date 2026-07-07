@@ -4331,7 +4331,7 @@ async function printSelectedInspectionItems(folderId) {
       const filePath = doc.file_path || (doc.file_url ? doc.file_url.split('/library/')[1]?.split('?')[0] : null);
       if(filePath) url = await getLibraryFileUrl(filePath) || url;
     } catch(e) {}
-    return { url, paper_size: item.paper_size || 'A4 landscape', title: doc.title };
+    return { id: item.id, url, paper_size: item.paper_size || 'A4 landscape', title: doc.title };
   }));
 
   const validItems = signedItems.filter(Boolean);
