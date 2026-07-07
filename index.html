@@ -4325,10 +4325,7 @@ async function printSelectedInspectionItems(folderId) {
   if(validItems.length === 0) { showToast('인쇄할 도면이 없어요.'); return; }
 
   const printWin = window.open('', '_blank');
-  const pageStyles = validItems.map((item,i) => {
-    const size = item.paper_size || 'A4 landscape';
-    return `@page p${i}{size:${size};margin:5mm;}.pg${i}{page:p${i};}`;
-  }).join('');
+  const pageStyles = '@page{margin:5mm;}';
   const styleStr = `
     *{margin:0;padding:0;box-sizing:border-box;}
     body{background:#fff;}
@@ -4340,7 +4337,7 @@ async function printSelectedInspectionItems(folderId) {
   `;
   const pagesHtml = validItems.map((item,i) => {
     const isLast = i === validItems.length - 1;
-    return `<div class="page pg${i}" style="page-break-after:${isLast?'avoid':'always'};break-after:${isLast?'avoid':'page'};"><img src="${item.url}" alt="${item.title}"></div>`;
+    return `<div class="page" style="page-break-after:${isLast?'avoid':'always'};break-after:${isLast?'avoid':'page'};"><img src="${item.url}" alt="${item.title}"></div>`;
   }).join('');
   const scriptStr = 'window.onload=function(){setTimeout(function(){window.print();},800);};';
   printWin.document.write('<!DOCTYPE html><html><head><title>검측요청서</title><style>' + styleStr + '<\/style><\/head><body>' + pagesHtml + '<script>' + scriptStr + '<\/scr' + 'ipt><\/body><\/html>');
@@ -4368,10 +4365,7 @@ async function printInspectionFolder(folderId) {
   const validItems = signedItems.filter(Boolean);
 
   const printWin = window.open('', '_blank');
-  const pageStyles = validItems.map((item,i) => {
-    const size = item.paper_size || 'A4 landscape';
-    return `@page p${i}{size:${size};margin:5mm;}.pg${i}{page:p${i};}`;
-  }).join('');
+  const pageStyles = '@page{margin:5mm;}';
 
   const styleStr = `
     *{margin:0;padding:0;box-sizing:border-box;}
@@ -4384,7 +4378,7 @@ async function printInspectionFolder(folderId) {
   `;
   const pagesHtml = validItems.map((item,i) => {
     const isLast = i === validItems.length - 1;
-    return `<div class="page pg${i}" style="page-break-after:${isLast?'avoid':'always'};break-after:${isLast?'avoid':'page'};"><img src="${item.url}" alt="${item.title}"></div>`;
+    return `<div class="page" style="page-break-after:${isLast?'avoid':'always'};break-after:${isLast?'avoid':'page'};"><img src="${item.url}" alt="${item.title}"></div>`;
   }).join('');
   const scriptStr = 'window.onload=function(){setTimeout(function(){window.print();},800);};';
   printWin.document.write('<!DOCTYPE html><html><head><title>검측요청서</title><style>' + styleStr + '<\/style><\/head><body>' + pagesHtml + '<script>' + scriptStr + '<\/scr' + 'ipt><\/body><\/html>');
