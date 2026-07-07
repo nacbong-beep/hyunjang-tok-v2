@@ -4348,21 +4348,38 @@ async function printSelectedInspectionItems(folderId) {
       img:last-child{page-break-after:avoid;}
     }
   `;
-  const pagesHtml = validItems.map((item,i) => {
-    const isLast = i === validItems.length - 1;
-    const isRotated = rotatedIds?.has(item.id);
-    const pageBreak = `page-break-after:${isLast?'avoid':'always'};break-after:${isLast?'avoid':'page'};`;
-    const imgStyle = isRotated
-      ? 'height:100%;max-width:100%;object-fit:contain;transform:rotate(90deg);transform-origin:center center;'
-      : 'width:100%;height:100%;object-fit:contain;';
-    return `<div style="${pageBreak}width:100%;height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;"><img src="${item.url}" style="${imgStyle}"></div>`;
+  // 회전 이미지를 canvas로 변환
+  async function rotateImgToDataUrl(url) {
+    return new Promise(resolve => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalHeight;
+        canvas.height = img.naturalWidth;
+        const ctx = canvas.getContext('2d');
+        ctx.translate(canvas.width/2, canvas.height/2);
+        ctx.rotate(Math.PI/2);
+        ctx.drawImage(img, -img.naturalWidth/2, -img.naturalHeight/2);
+        resolve(canvas.toDataURL('image/jpeg', 0.95));
+      };
+      img.onerror = (e) => { console.error('이미지 로드 실패:', url, e); resolve(url); };
+      img.src = url + (url.includes('?') ? '&' : '?') + 't=' + Date.now();
+    });
+  }
+  // 회전 이미지 미리 변환
+  const processedItems = await Promise.all(validItems.map(async item => {
+    if(rotatedIds?.has(item.id)) {
+      const rotatedUrl = await rotateImgToDataUrl(item.url);
+      return {...item, url: rotatedUrl};
+    }
+    return item;
+  }));
+  const pagesHtml = processedItems.map((item,i) => {
+    const isLast = i === processedItems.length - 1;
+    return `<div style="page-break-after:${isLast?'avoid':'always'};break-after:${isLast?'avoid':'page'};width:100%;height:100vh;display:flex;align-items:center;justify-content:center;"><img src="${item.url}" style="width:100%;height:100%;object-fit:contain;"></div>`;
   }).join('');
-  const scriptStr = 'window.onload=function(){' +
-    'document.querySelectorAll("img[style*=rotate]").forEach(function(img){' +
-    'var w=img.naturalWidth,h=img.naturalHeight;' +
-    'img.style.width=h+"px";img.style.height=w+"px";' +
-    '});' +
-    'setTimeout(function(){window.print();},800);};';
+  const scriptStr = 'window.onload=function(){setTimeout(function(){window.print();},800);};';
   printWin.document.write('<!DOCTYPE html><html><head><title>검측요청서</title><style>' + styleStr + '<\/style><\/head><body>' + pagesHtml + '<script>' + scriptStr + '<\/scr' + 'ipt><\/body><\/html>');
   printWin.document.close();
 }
