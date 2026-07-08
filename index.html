@@ -1196,24 +1196,38 @@ function renderCalendarView(el) {
     const startDate = `${y}-${String(mo+1).padStart(2,'0')}-01`;
     const endDate = `${y}-${String(mo+1).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
     const todayStr = todayKey();
-    // 과거는 archive, 미래는 forecast 엔드포인트
-    const isAllFuture = startDate > todayStr;
-    const isAllPast = endDate < todayStr;
-    const params = `latitude=36.9923&longitude=127.0892&daily=weathercode,precipitation_sum&timezone=Asia/Seoul&start_date=${startDate}&end_date=${endDate}`;
-    const apiUrl = isAllFuture
-      ? `https://api.open-meteo.com/v1/forecast?${params}`
-      : isAllPast
-        ? `https://archive-api.open-meteo.com/v1/archive?${params}`
-        : `https://api.open-meteo.com/v1/forecast?${params}`;
-    fetch(apiUrl)
-      .then(r=>r.json()).then(data=>{
-        const wd = {};
-        (data.daily?.time||[]).forEach((date,i)=>{
-          wd[date] = { code: data.daily.weathercode[i], rain: data.daily.precipitation_sum[i] };
-        });
-        localStorage.setItem(weatherCacheKey, JSON.stringify({data:wd, ts:Date.now()}));
-        renderCalendarView(el);
-      }).catch(()=>{});
+
+    const fetchWeather = async () => {
+      const wd = {};
+      const commonParams = `latitude=36.9923&longitude=127.0892&daily=weathercode,precipitation_sum&timezone=Asia/Seoul`;
+
+      // 과거 구간
+      if(startDate <= todayStr) {
+        const pastEnd = endDate < todayStr ? endDate : todayStr;
+        try {
+          const r = await fetch(`https://archive-api.open-meteo.com/v1/archive?${commonParams}&start_date=${startDate}&end_date=${pastEnd}`);
+          const d = await r.json();
+          (d.daily?.time||[]).forEach((date,i) => {
+            wd[date] = { code: d.daily.weathercode[i], rain: d.daily.precipitation_sum[i] };
+          });
+        } catch(e) {}
+      }
+      // 미래 구간
+      if(endDate >= todayStr) {
+        const futureStart = startDate > todayStr ? startDate : todayStr;
+        try {
+          const r = await fetch(`https://api.open-meteo.com/v1/forecast?${commonParams}&start_date=${futureStart}&end_date=${endDate}`);
+          const d = await r.json();
+          (d.daily?.time||[]).forEach((date,i) => {
+            wd[date] = { code: d.daily.weathercode[i], rain: d.daily.precipitation_sum[i] };
+          });
+        } catch(e) {}
+      }
+
+      localStorage.setItem(weatherCacheKey, JSON.stringify({data:wd, ts:Date.now()}));
+      renderCalendarView(el);
+    };
+    fetchWeather();
   }
 
   const weatherData = cachedWeather || {};
