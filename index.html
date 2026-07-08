@@ -7054,10 +7054,12 @@ async function loadGalleryFolders() {
   try {
     const rows = await sbFetch('gallery_folders', 'GET', null, '?order=sort_order');
     galleryFolders = rows || [];
-    // 각 폴더 사진 수 가져오기
+    // 각 폴더 사진 수 가져오기 (id만)
     await Promise.all(galleryFolders.map(async f => {
-      const photos = await sbFetch('gallery_photos', 'GET', null, `?folder_id=eq.${f.id}&select=id`);
-      galleryPhotos[f.id] = galleryPhotos[f.id] || photos || [];
+      if(!galleryPhotos[f.id] || galleryPhotos[f.id].length === 0) {
+        const photos = await sbFetch('gallery_photos', 'GET', null, `?folder_id=eq.${f.id}&select=id`);
+        if(!galleryPhotos[f.id]) galleryPhotos[f.id] = photos || [];
+      }
     }));
   } catch(e) { console.error(e); }
 }
@@ -7411,9 +7413,8 @@ function initGalleryFolderDrag() {
 
 async function openGalleryFolder(folderId) {
   currentGalleryFolder = folderId;
-  if(!galleryPhotos[folderId]) {
-    await loadGalleryPhotos(folderId);
-  }
+  // 전체 컬럼으로 로드 (사진 수 체크 시 id만 가져온 경우 재로드)
+  await loadGalleryPhotos(folderId);
   _renderGalleryFolderDetail(document.getElementById('main-content'), folderId);
 }
 
