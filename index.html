@@ -7054,6 +7054,11 @@ async function loadGalleryFolders() {
   try {
     const rows = await sbFetch('gallery_folders', 'GET', null, '?order=sort_order');
     galleryFolders = rows || [];
+    // 각 폴더 사진 수 가져오기
+    await Promise.all(galleryFolders.map(async f => {
+      const photos = await sbFetch('gallery_photos', 'GET', null, `?folder_id=eq.${f.id}&select=id`);
+      galleryPhotos[f.id] = galleryPhotos[f.id] || photos || [];
+    }));
   } catch(e) { console.error(e); }
 }
 
@@ -7242,14 +7247,14 @@ function _renderGalleryFolderDetail(el, folderId) {
   const photos = searchVal ? allPhotos.filter(p => (p.title||'').toLowerCase().includes(searchVal)) : allPhotos;
   el.innerHTML = `
     <div style="max-width:900px;margin:0 auto;padding:0 0 40px">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">
         <button onclick="currentGalleryFolder=null;renderGalleryView(document.getElementById('main-content'))" style="background:none;border:1px solid var(--border2);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;color:var(--text)">← 목록</button>
-        <span style="font-size:16px;font-weight:700;color:var(--text)">🗂️ ${folder?.name||''}</span>
-        <div style="margin-left:auto;display:flex;gap:8px">
-          <input type="file" id="gallery-file-input" accept="image/*" multiple style="display:none" onchange="handleGalleryFileSelect(event,'${folderId}')">
-          <button onclick="document.getElementById('gallery-file-input').click()" style="background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text)">📷 사진 선택</button>
-          <button onclick="pasteGalleryPhoto('${folderId}')" style="background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text)">📋 붙여넣기</button>
-        </div>
+        <span style="font-size:15px;font-weight:700;color:var(--text);flex:1">🗂️ ${folder?.name||''}</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input type="file" id="gallery-file-input" accept="image/*" multiple style="display:none" onchange="handleGalleryFileSelect(event,'${folderId}')">
+        <button onclick="document.getElementById('gallery-file-input').click()" style="flex:1;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text)">📷 사진 선택</button>
+        <button onclick="pasteGalleryPhoto('${folderId}')" style="flex:1;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text)">📋 붙여넣기</button>
       </div>
       <input id="gallery-search" class="modal-input" placeholder="🔍 사진 제목 검색..." value="${searchVal}" oninput="_renderGalleryFolderDetail(document.getElementById('main-content'),'${folderId}')" style="width:100%;margin-bottom:12px">
       ${photos.length === 0 ? `<div style="text-align:center;color:var(--muted);padding:60px 0;font-size:14px">${searchVal ? '검색 결과가 없어요.' : '사진이 없어요. 사진을 추가해보세요.'}</div>` : `
