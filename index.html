@@ -1004,7 +1004,7 @@ function calendarCard() {
         </div>
         ${[...getScheduleEvents(), ...getUpcomingCustomEvents()].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6).map(e=>{
           const isOffDay = e.isCustom && /^휴무/.test((e.title||'').trim());
-          const borderColor = isOffDay ? '#ef4444' : e.isCustom ? (e.color&&e.color!=='none'?e.color:'#3b82f6') : '#7c3aed';
+          const isWorkDay = /^근무/.test((e.title||'').trim()); const borderColor = isOffDay ? '#ef4444' : isWorkDay ? '#0f766e' : e.isCustom ? (e.color&&e.color!=='none'?e.color:'#3b82f6') : '#7c3aed';
           const dateColor = isOffDay ? '#ef4444' : e.isCustom ? (e.color&&e.color!=='none'?e.color:'#3b82f6') : '#7c3aed';
           const icon = isOffDay ? '' : e.isCustom ? '✏️' : '📋';
           const displayDate = e.isCustom && e.date < todayKey() ? todayKey() : e.date;
@@ -1292,8 +1292,9 @@ function renderCalendarView(el) {
       </div>
       ${[...getScheduleEvents(),...getUpcomingCustomEvents()].sort((a,b)=>a.date.localeCompare(b.date)).slice(0,6).map(e=>{
         const isOffDay=e.isCustom&&/^휴무/.test((e.title||'').trim());
-        const borderColor=isOffDay?'#ef4444':e.isCustom?(e.color&&e.color!=='none'?e.color:'#3b82f6'):'#7c3aed';
-        const dateColor=isOffDay?'#ef4444':e.isCustom?(e.color&&e.color!=='none'?e.color:'#3b82f6'):'#7c3aed';
+        const isWorkDay=e.isCustom&&/^근무/.test((e.title||'').trim());
+        const borderColor=isOffDay?'#ef4444':isWorkDay?'#0f766e':e.isCustom?(e.color&&e.color!=='none'?e.color:'#3b82f6'):'#7c3aed';
+        const dateColor=isOffDay?'#ef4444':isWorkDay?'#0f766e':e.isCustom?(e.color&&e.color!=='none'?e.color:'#3b82f6'):'#7c3aed';
         const icon=isOffDay?'':e.isCustom?'✏️':'📋';
         const displayDate=e.isCustom&&e.date<todayKey()?todayKey():e.date;
         const dateLabel=e.isCustom&&e.endDate?formatDate(displayDate)+' ~ '+formatDate(e.endDate):formatDate(displayDate);
@@ -5501,7 +5502,7 @@ function openPersonalEventModal(dateStr, editId = null) {
   const existing = document.getElementById('personal-event-modal');
   if(existing) existing.remove();
   const ev = editId ? personalEvents.find(e => e.id === editId) : null;
-  const colors = ['#3b82f6','#8b5cf6','#10b981','#f59e0b','#ef4444','#ec4899','#06b6d4'];
+  const colors = ['#ef4444','#f97316','#f5c518','#10b981','#3b82f6','#8b5cf6','#64748b','#1a2332'];
   let selectedColor = ev?.color || '#3b82f6';
   const modal = document.createElement('div');
   modal.id = 'personal-event-modal';
@@ -8146,7 +8147,7 @@ function handleDayClick(dateStr) {
       ondragover="onDayDragOver(event,${i},'${dateStr}')"
       ondrop="onDayDrop(event,${i},'${dateStr}')"
       ondragend="onDayDragEnd(event,'${dateStr}')"
-      style="margin-bottom:8px;border:1px solid var(--border);border-left:3px solid ${/^휴무/.test((item.title||'').trim())?'#ef4444':(item.title||'').includes('타설')?'#f5c518':item.type==='custom'?'#3b82f6':'#7c3aed'};border-radius:8px;padding:12px;background:${/^휴무/.test((item.title||'').trim())?'#fff0f0':(item.title||'').includes('타설')?'#fffbe6':'var(--surface)'};display:flex;align-items:flex-start;gap:8px;cursor:grab;transition:opacity 0.15s">
+      style="margin-bottom:8px;border:1px solid var(--border);border-left:3px solid ${/^휴무/.test((item.title||'').trim())?'#ef4444':(item.title||'').includes('타설')?'#f5c518':item.type==='custom'&&item.color&&item.color!=='none'?item.color:item.type==='custom'?'#3b82f6':'#7c3aed'};border-radius:8px;padding:12px;background:${/^휴무/.test((item.title||'').trim())?'#fff0f0':(item.title||'').includes('타설')?'#fffbe6':item.type==='custom'&&item.color&&item.color!=='none'?item.color+'11':'var(--surface)'};display:flex;align-items:flex-start;gap:8px;cursor:grab;transition:opacity 0.15s">
       <span style="font-size:14px;color:var(--soft);margin-top:2px">⠿</span>
       <div style="flex:1;cursor:pointer" onclick="closeDayModal();${item.type==='custom'?`openEditEventModal('${item.id}')`:`openEditMsgEvent('${item.id}')`}">
         <span class="badge ${badgeClass(tag)}">${tagIcon(tag)} ${tag} ✏️</span>
