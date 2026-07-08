@@ -7054,12 +7054,10 @@ async function loadGalleryFolders() {
   try {
     const rows = await sbFetch('gallery_folders', 'GET', null, '?order=sort_order');
     galleryFolders = rows || [];
-    // 각 폴더 사진 수 가져오기 (id만)
+    // 각 폴더 사진 수만 카운트 (기존 로드된 사진 덮어쓰지 않음)
     await Promise.all(galleryFolders.map(async f => {
-      if(!galleryPhotos[f.id] || galleryPhotos[f.id].length === 0) {
-        const photos = await sbFetch('gallery_photos', 'GET', null, `?folder_id=eq.${f.id}&select=id`);
-        if(!galleryPhotos[f.id]) galleryPhotos[f.id] = photos || [];
-      }
+      const photos = await sbFetch('gallery_photos', 'GET', null, `?folder_id=eq.${f.id}&select=id`);
+      f._count = (photos||[]).length;
     }));
   } catch(e) { console.error(e); }
 }
@@ -7504,7 +7502,7 @@ function _renderGalleryFolderList(el) {
             <button onclick="event.stopPropagation();openGalleryFolderMenu('${f.id}',this)" style="position:absolute;top:8px;right:8px;background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:2px 6px;line-height:1">⋮</button>
             <div style="font-size:36px;margin-bottom:8px">🗂️</div>
             <div style="font-size:13px;font-weight:600;color:var(--text);word-break:break-all">${f.name}</div>
-            <div style="font-size:11px;color:var(--muted);margin-top:4px">${(galleryPhotos[f.id]||[]).length}장</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">${f._count ?? (galleryPhotos[f.id]||[]).length}장</div>
           </div>
         `).join('')}
       </div>`}
@@ -7581,10 +7579,20 @@ function _renderGalleryFolderDetail(el, folderId) {
             observer.disconnect();
             const path = img.dataset.path;
             const cacheKey = 'hj_thumb_cache_v1_' + path;
-            const cached = localStorage.getItem(cacheKey);
-            if(cached) { img.src = cached; return; }
+            const cachedRaw = localStorage.getItem(cacheKey);
+            const isGallery = path.startsWith('gallery/');
+            const ttl = isGallery ? 50*60*1000 : 7*24*60*60*1000; // 갤러리:50분, 나머지:7일
+            if(cachedRaw) {
+              try {
+                const {url: cachedUrl, ts} = JSON.parse(cachedRaw);
+                if(Date.now() - ts < ttl) { img.src = cachedUrl; return; }
+              } catch(e) { img.src = cachedRaw; return; } // 구형 캐시 포맷
+            }
             const url = await getLibraryFileUrl(path);
-            if(url) { img.src = url; localStorage.setItem(cacheKey, url); }
+            if(url) {
+              img.src = url;
+              localStorage.setItem(cacheKey, JSON.stringify({url, ts: Date.now()}));
+            }
           }
         });
       });
