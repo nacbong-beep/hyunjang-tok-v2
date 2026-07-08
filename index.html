@@ -565,9 +565,10 @@ function renderSidebar() {
     punch: {icon:'📌', label:'펀치리스트'},
     todo: {icon:'✅', label:'할일', count: pending},
     personal: {icon:'📒', label:'개인노트'},
+    gallery: {icon:'🖼️', label:'갤러리'},
     settings: {icon:'⚙️', label:'설정'},
   };
-  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','punch','todo','personal','settings'];
+  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','punch','todo','personal','gallery','settings'];
   const menuOrder = (appSettings.menuOrder && appSettings.menuOrder.length === defaultOrder.length)
     ? appSettings.menuOrder
     : defaultOrder;
@@ -624,7 +625,7 @@ function setView(v) {
   currentView = v;
   closeSidebar();
   if(v.startsWith('cat_')) { selectedCategory=v.replace('cat_',''); currentView='search'; }
-  const titles = {dashboard:'대시보드',calendar:'캘린더',weekly:'주간업무일지',library:'공정표 관리',drawing:'도면 관리',construction:'시공 관리',inspection:'검측요청서',punch:'펀치리스트',todo:'할일',personal:'개인노트',search:'검색',ai_search:'AI 검색',input:'메시지 입력',settings:'설정'};
+  const titles = {dashboard:'대시보드',calendar:'캘린더',weekly:'주간업무일지',library:'공정표 관리',drawing:'도면 관리',construction:'시공 관리',inspection:'검측요청서',punch:'펀치리스트',todo:'할일',personal:'개인노트',gallery:'갤러리',search:'검색',ai_search:'AI 검색',input:'메시지 입력',settings:'설정'};
   document.getElementById('header-title').textContent = titles[v]||(v.startsWith('cat_')?v.replace('cat_','')+'  검색':v);
   const guideEl = document.getElementById('header-guide');
   if(guideEl) guideEl.style.display = (currentView==='dashboard') ? 'block' : 'none';
@@ -643,6 +644,7 @@ function setView(v) {
   else if(currentView==='inspection') renderInspectionView(el);
   else if(currentView==='personal') { renderPersonalView(el); }
   else if(currentView==='punch') renderPunchView(el);
+  else if(currentView==='gallery') renderGalleryView(el);
   else if(currentView==='settings') renderSettingsView(el);
   else if(currentView.startsWith('room_')) {
     renderRoomView(el,v);
@@ -7043,6 +7045,262 @@ function deletePunchContractor(name) {
   showToast(`✅ "${name}" 협력사가 삭제됐어요.`);
 }
 
+// ===== 갤러리 =====
+let galleryFolders = [];
+let galleryPhotos = {};
+let currentGalleryFolder = null;
+
+async function loadGalleryFolders() {
+  try {
+    const rows = await sbFetch('gallery_folders', 'GET', null, '?order=sort_order');
+    galleryFolders = rows || [];
+  } catch(e) { console.error(e); }
+}
+
+async function loadGalleryPhotos(folderId) {
+  try {
+    const rows = await sbFetch('gallery_photos', 'GET', null, `?folder_id=eq.${folderId}&order=created_at.desc`);
+    galleryPhotos[folderId] = rows || [];
+  } catch(e) { console.error(e); }
+}
+
+async function uploadGalleryPhoto(folderId, file) {
+  const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+  // 1920px 이하로 리사이즈
+  const resized = await resizeImage(file, 1920);
+  const baseName = `gallery_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+  const filePath = `gallery/${baseName}.jpg`;
+  const thumbPath = `gallery/thumb_${baseName}.jpg`;
+
+  await fetch(`${SUPABASE_URL}/storage/v1/object/library/${filePath}`, {
+    method: 'POST',
+    headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'image/jpeg' },
+    body: resized
+  });
+
+  const thumbBlob = await resizeImageToThumb(file);
+  if(thumbBlob) {
+    await fetch(`${SUPABASE_URL}/storage/v1/object/library/${thumbPath}`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'image/jpeg' },
+      body: thumbBlob
+    });
+  }
+
+  await sbFetch('gallery_photos', 'POST', [{ id: uid(), folder_id: folderId, file_path: filePath, thumb_path: thumbBlob ? thumbPath : null, memo: '' }]);
+  await loadGalleryPhotos(folderId);
+  renderGalleryView(document.getElementById('main-content'));
+}
+
+async function resizeImage(file, maxSize) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if(w > maxSize || h > maxSize) {
+        if(w > h) { h = Math.round(h * maxSize / w); w = maxSize; }
+        else { w = Math.round(w * maxSize / h); h = maxSize; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(resolve, 'image/jpeg', 0.85);
+    };
+    img.src = url;
+  });
+}
+
+async function deleteGalleryPhoto(photoId, folderId) {
+  if(!confirm('이 사진을 삭제할까요?')) return;
+  await sbFetch('gallery_photos', 'DELETE', null, `?id=eq.${photoId}`);
+  galleryPhotos[folderId] = (galleryPhotos[folderId] || []).filter(p => p.id !== photoId);
+  renderGalleryView(document.getElementById('main-content'));
+}
+
+async function createGalleryFolder(name) {
+  const id = uid();
+  await sbFetch('gallery_folders', 'POST', [{ id, name, sort_order: galleryFolders.length }]);
+  galleryFolders.push({ id, name, sort_order: galleryFolders.length });
+  renderGalleryView(document.getElementById('main-content'));
+}
+
+async function deleteGalleryFolder(folderId) {
+  if(!confirm('폴더와 모든 사진을 삭제할까요?')) return;
+  await sbFetch('gallery_folders', 'DELETE', null, `?id=eq.${folderId}`);
+  galleryFolders = galleryFolders.filter(f => f.id !== folderId);
+  delete galleryPhotos[folderId];
+  currentGalleryFolder = null;
+  renderGalleryView(document.getElementById('main-content'));
+}
+
+async function pasteGalleryPhoto(folderId) {
+  try {
+    const items = await navigator.clipboard.read();
+    for(const item of items) {
+      for(const type of item.types) {
+        if(type.startsWith('image/')) {
+          const blob = await item.getType(type);
+          const file = new File([blob], `gallery_${Date.now()}.png`, { type });
+          showToast('⏳ 사진 업로드 중...');
+          await uploadGalleryPhoto(folderId, file);
+          showToast('✅ 사진이 추가됐어요!');
+          return;
+        }
+      }
+    }
+    showToast('클립보드에 이미지가 없어요.');
+  } catch(e) { showToast('붙여넣기 권한이 필요해요.'); }
+}
+
+function renderGalleryView(el) {
+  if(!el) return;
+  if(galleryFolders.length === 0) {
+    loadGalleryFolders().then(() => _renderGalleryView(el));
+    return;
+  }
+  _renderGalleryView(el);
+}
+
+function _renderGalleryView(el) {
+  if(currentGalleryFolder) {
+    _renderGalleryFolderDetail(el, currentGalleryFolder);
+  } else {
+    _renderGalleryFolderList(el);
+  }
+}
+
+function _renderGalleryFolderList(el) {
+  el.innerHTML = `
+    <div style="max-width:900px;margin:0 auto;padding:0 0 40px">
+      <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
+        <button onclick="openCreateGalleryFolderModal()" style="background:var(--primary);color:#fff;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">+ 새 폴더</button>
+      </div>
+      ${galleryFolders.length === 0 ? `<div style="text-align:center;color:var(--muted);padding:60px 0;font-size:14px">폴더가 없어요. 새 폴더를 만들어보세요.</div>` : `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
+        ${galleryFolders.map(f => `
+          <div onclick="openGalleryFolder('${f.id}')" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 16px;cursor:pointer;text-align:center;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+            <div style="font-size:36px;margin-bottom:8px">🗂️</div>
+            <div style="font-size:13px;font-weight:600;color:var(--text);word-break:break-all">${f.name}</div>
+            <div style="font-size:11px;color:var(--muted);margin-top:4px">${(galleryPhotos[f.id]||[]).length}장</div>
+            <button onclick="event.stopPropagation();deleteGalleryFolder('${f.id}')" style="margin-top:8px;background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer">삭제</button>
+          </div>
+        `).join('')}
+      </div>`}
+    </div>`;
+}
+
+async function openGalleryFolder(folderId) {
+  currentGalleryFolder = folderId;
+  if(!galleryPhotos[folderId]) {
+    await loadGalleryPhotos(folderId);
+  }
+  _renderGalleryFolderDetail(document.getElementById('main-content'), folderId);
+}
+
+function _renderGalleryFolderDetail(el, folderId) {
+  const folder = galleryFolders.find(f => f.id === folderId);
+  const photos = galleryPhotos[folderId] || [];
+  el.innerHTML = `
+    <div style="max-width:900px;margin:0 auto;padding:0 0 40px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        <button onclick="currentGalleryFolder=null;renderGalleryView(document.getElementById('main-content'))" style="background:none;border:1px solid var(--border2);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;color:var(--text)">← 목록</button>
+        <span style="font-size:16px;font-weight:700;color:var(--text)">🗂️ ${folder?.name||''}</span>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <input type="file" id="gallery-file-input" accept="image/*" multiple style="display:none" onchange="handleGalleryFileSelect(event,'${folderId}')">
+          <button onclick="document.getElementById('gallery-file-input').click()" style="background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text)">📷 사진 선택</button>
+          <button onclick="pasteGalleryPhoto('${folderId}')" style="background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text)">📋 붙여넣기</button>
+        </div>
+      </div>
+      ${photos.length === 0 ? `<div style="text-align:center;color:var(--muted);padding:60px 0;font-size:14px">사진이 없어요. 사진을 추가해보세요.</div>` : `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">
+        ${photos.map(p => `
+          <div style="position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;cursor:pointer;background:var(--surface)" onclick="openGalleryPhotoViewer('${p.file_path}')">
+            <img data-path="${p.thumb_path||p.file_path}" class="lib-thumb" style="width:100%;height:100%;object-fit:cover">
+            <button onclick="event.stopPropagation();deleteGalleryPhoto('${p.id}','${folderId}')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+          </div>
+        `).join('')}
+      </div>`}
+    </div>`;
+  // lazy load 썸네일
+  setTimeout(() => {
+    el.querySelectorAll('img.lib-thumb[data-path]').forEach(img => {
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(async e => {
+          if(e.isIntersecting) {
+            observer.disconnect();
+            const path = img.dataset.path;
+            const cacheKey = 'hj_thumb_cache_v1_' + path;
+            const cached = localStorage.getItem(cacheKey);
+            if(cached) { img.src = cached; return; }
+            const url = await getLibraryFileUrl(path);
+            if(url) { img.src = url; localStorage.setItem(cacheKey, url); }
+          }
+        });
+      });
+      observer.observe(img);
+    });
+  }, 50);
+}
+
+async function handleGalleryFileSelect(e, folderId) {
+  const files = [...(e.target.files||[])];
+  if(!files.length) return;
+  showToast(`⏳ ${files.length}장 업로드 중...`);
+  for(const file of files) {
+    await uploadGalleryPhoto(folderId, file);
+  }
+  showToast(`✅ ${files.length}장 추가됐어요!`);
+  e.target.value = '';
+}
+
+function openGalleryPhotoViewer(filePath) {
+  const existing = document.getElementById('gallery-viewer');
+  if(existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'gallery-viewer';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9000;display:flex;align-items:center;justify-content:center';
+  modal.onclick = () => modal.remove();
+  modal.innerHTML = `<img id="gallery-viewer-img" style="max-width:90vw;max-height:90vh;border-radius:8px;object-fit:contain">
+    <button onclick="event.stopPropagation();document.getElementById('gallery-viewer').remove()" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:50%;width:36px;height:36px;font-size:18px;cursor:pointer">✕</button>`;
+  document.body.appendChild(modal);
+  getLibraryFileUrl(filePath).then(url => {
+    if(url) document.getElementById('gallery-viewer-img').src = url;
+  });
+}
+
+function openCreateGalleryFolderModal() {
+  const existing = document.getElementById('gallery-folder-modal');
+  if(existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'gallery-folder-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;padding:24px;width:90%;max-width:360px">
+      <div style="font-size:16px;font-weight:700;margin-bottom:16px">새 폴더</div>
+      <input id="gallery-folder-name" class="modal-input" placeholder="폴더 이름 (예: 심정공사)" style="width:100%;margin-bottom:16px">
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('gallery-folder-modal').remove()" class="btn-ghost" style="flex:1">취소</button>
+        <button onclick="confirmCreateGalleryFolder()" class="btn-primary" style="flex:1">만들기</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('gallery-folder-name')?.focus(), 50);
+  document.getElementById('gallery-folder-name').addEventListener('keydown', e => {
+    if(e.key === 'Enter') confirmCreateGalleryFolder();
+  });
+}
+
+async function confirmCreateGalleryFolder() {
+  const name = document.getElementById('gallery-folder-name')?.value.trim();
+  if(!name) { showToast('폴더 이름을 입력해주세요.'); return; }
+  document.getElementById('gallery-folder-modal')?.remove();
+  await createGalleryFolder(name);
+  showToast('✅ 폴더가 만들어졌어요!');
+}
+
+// ===== 설정 =====
 function renderSettingsView(el) {
   el.innerHTML = `
     <div style="max-width:900px;display:flex;flex-direction:column;gap:16px">
@@ -7225,7 +7483,7 @@ function initMenuOrderList() {
     personal: {icon:'📒', label:'개인노트'},
     settings: {icon:'⚙️', label:'설정'},
   };
-  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','punch','todo','personal','settings'];
+  const defaultOrder = ['dashboard','calendar','weekly','library','drawing','construction','inspection','punch','todo','personal','gallery','settings'];
   let order = (appSettings.menuOrder && appSettings.menuOrder.length === defaultOrder.length)
     ? [...appSettings.menuOrder]
     : [...defaultOrder];
