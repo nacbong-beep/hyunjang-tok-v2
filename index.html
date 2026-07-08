@@ -1183,6 +1183,31 @@ function renderCalendarView(el) {
   for(let d=1;d<=daysInMonth;d++) cells.push(new Date(y,mo,d));
   const monthNames=['1월','2월','3월','4월','5월','6월','7월','8월','9월','10월','11월','12월'];
 
+  // 월별 날씨 캐시 키
+  const weatherCacheKey = `hj_cal_weather_${y}_${mo+1}`;
+  const cachedWeather = (() => {
+    try { const c = JSON.parse(localStorage.getItem(weatherCacheKey)||'null');
+      if(c && Date.now()-c.ts < 6*60*60*1000) return c.data; } catch(e) {}
+    return null;
+  })();
+
+  // 날씨 데이터 없으면 비동기 로드 후 재렌더
+  if(!cachedWeather) {
+    const startDate = `${y}-${String(mo+1).padStart(2,'0')}-01`;
+    const endDate = `${y}-${String(mo+1).padStart(2,'0')}-${String(daysInMonth).padStart(2,'0')}`;
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=36.9923&longitude=127.0892&daily=weathercode,precipitation_sum&timezone=Asia/Seoul&start_date=${startDate}&end_date=${endDate}`)
+      .then(r=>r.json()).then(data=>{
+        const wd = {};
+        data.daily.time.forEach((date,i)=>{
+          wd[date] = { code: data.daily.weathercode[i], rain: data.daily.precipitation_sum[i] };
+        });
+        localStorage.setItem(weatherCacheKey, JSON.stringify({data:wd, ts:Date.now()}));
+        renderCalendarView(el);
+      }).catch(()=>{});
+  }
+
+  const weatherData = cachedWeather || {};
+
   const calHTML = `
     <div class="calendar-card" style="border:none;padding:0;background:transparent">
       <div class="calendar-head">
@@ -1226,7 +1251,7 @@ function renderCalendarView(el) {
           if(savedOrder.length){singleItems.sort((a,b)=>{const ai=savedOrder.indexOf(a.id);const bi=savedOrder.indexOf(b.id);return(ai===-1?999:ai)-(bi===-1?999:bi);});}
           return `<div class="cal-cell ${isToday?'today':''} ${isSun?'sunday':''} ${holiday?'holiday':''} ${isOffDay?'off-day':''} ${hasCustom&&!isOffDay&&!isWorkSat?'has-custom':''}" data-dk="${dk}" onclick="handleDayClick('${dk}')">
             <div class="cal-date" style="${isOffDay?'color:#ef4444':''}">
-              <span>${date.getDate()}</span>${isOffDay?'<span style="font-size:11px;color:#ef4444;font-weight:900;margin-left:3px">휴무</span>':''}${isWorkSat?'<span style="font-size:11px;color:#0f766e;font-weight:900;margin-left:3px">근무</span>':''}${holiday?`<span class="holiday-name" style="display:inline;margin-left:3px;margin-bottom:0">${holiday}</span>`:''}
+              <span>${date.getDate()}</span>${isOffDay?'<span style="font-size:11px;color:#ef4444;font-weight:900;margin-left:3px">휴무</span>':''}${isWorkSat?'<span style="font-size:11px;color:#0f766e;font-weight:900;margin-left:3px">근무</span>':''}${holiday?`<span class="holiday-name" style="display:inline;margin-left:3px;margin-bottom:0">${holiday}</span>`:''}${(()=>{const w=weatherData[dk];if(!w) return '';const isRain=[51,53,55,61,63,65,80,81,82,95,96,99].includes(w.code)||(w.rain>0.5);const isSnow=[71,73,75].includes(w.code);return isRain?'<span style="font-size:10px;margin-left:3px" title="우천">🌧️</span>':isSnow?'<span style="font-size:10px;margin-left:3px" title="눈">❄️</span>':''})()}
             </div>
             ${singleItems.slice(0,4).map(e=>e.type==='msg'?`<span class="cal-event ${e.title&&e.title.includes('타설')?'ev-tasel':'ev-purple'}" title="${e.title}">${shortTag(e.tag)}</span>`:`<span class="cal-event ${e.title&&e.title.includes('타설')?'ev-tasel':'custom-ev'}" onclick="event.stopPropagation();openEditEventModal('${e.id}')" title="${e.title}${e.memo?' · '+e.memo:''}" style="${e.color&&e.color!=='none'?'background:'+e.color+'22;color:'+e.color:''}">${e.title}</span>`).join('')}
             ${singleItems.length>5?`<span class="cal-more" onclick="event.stopPropagation();handleDayClick('${dk}')">+${singleItems.length-4}</span>`:(singleItems.length===5?`<span class="cal-event ${singleItems[4].title&&singleItems[4].title.includes('타설')?'ev-tasel':(singleItems[4].type==='msg'?'ev-purple':'custom-ev')}" title="${singleItems[4].title}">${singleItems[4].type==='msg'?shortTag(singleItems[4].tag):singleItems[4].title}</span>`:'')}
