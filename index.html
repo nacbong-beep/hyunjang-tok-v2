@@ -7087,7 +7087,7 @@ async function uploadGalleryPhoto(folderId, file) {
     });
   }
 
-  await sbFetch('gallery_photos', 'POST', [{ id: uid(), folder_id: folderId, file_path: filePath, thumb_path: thumbBlob ? thumbPath : null, memo: '' }]);
+  await sbFetch('gallery_photos', 'POST', [{ folder_id: folderId, file_path: filePath, thumb_path: thumbBlob ? thumbPath : null, memo: '' }]);
   await loadGalleryPhotos(folderId);
   renderGalleryView(document.getElementById('main-content'));
 }
@@ -7121,8 +7121,9 @@ async function deleteGalleryPhoto(photoId, folderId) {
 
 async function createGalleryFolder(name) {
   const id = uid();
-  await sbFetch('gallery_folders', 'POST', [{ id, name, sort_order: galleryFolders.length }]);
-  galleryFolders.push({ id, name, sort_order: galleryFolders.length });
+  const res = await sbFetch('gallery_folders', 'POST', [{ name, sort_order: galleryFolders.length }]);
+  if(res && res[0]) id = res[0].id;
+  await loadGalleryFolders();
   renderGalleryView(document.getElementById('main-content'));
 }
 
