@@ -7140,6 +7140,88 @@ async function deleteGalleryFolder(folderId) {
   renderGalleryView(document.getElementById('main-content'));
 }
 
+async function pasteGalleryMain() {
+  try {
+    const items = await navigator.clipboard.read();
+    for(const item of items) {
+      for(const type of item.types) {
+        if(type.startsWith('image/')) {
+          const blob = await item.getType(type);
+          const file = new File([blob], `gallery_${Date.now()}.png`, { type });
+          openGalleryUploadModal(file);
+          return;
+        }
+      }
+    }
+    showToast('클립보드에 이미지가 없어요.');
+  } catch(e) { showToast('붙여넣기 권한이 필요해요.'); }
+}
+
+async function handleGalleryMainFileSelect(e) {
+  const files = [...(e.target.files||[])];
+  if(!files.length) return;
+  if(files.length === 1) {
+    openGalleryUploadModal(files[0]);
+  } else {
+    // 여러 장은 폴더+제목 모달
+    openGalleryUploadModal(files);
+  }
+  e.target.value = '';
+}
+
+function openGalleryUploadModal(fileOrFiles) {
+  const isMulti = Array.isArray(fileOrFiles);
+  const existing = document.getElementById('gallery-upload-modal');
+  if(existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'gallery-upload-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;padding:24px;width:90%;max-width:380px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:16px">사진 업로드</div>
+      ${!isMulti ? `
+      <label class="field-label" style="margin-bottom:12px">제목 (선택)
+        <input id="gu-title" class="modal-input" placeholder="예: 심정펌프 설치">
+      </label>` : ''}
+      <label class="field-label" style="margin-bottom:16px">폴더 (선택)
+        <select id="gu-folder" class="modal-input">
+          <option value="">폴더 선택 안함 (미분류)</option>
+          ${galleryFolders.map(f => `<option value="${f.id}">${f.name}</option>`).join('')}
+        </select>
+      </label>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('gallery-upload-modal').remove()" class="btn-ghost" style="flex:1">취소</button>
+        <button onclick="confirmGalleryUpload()" class="btn-primary" style="flex:1">업로드</button>
+      </div>
+    </div>`;
+  modal._files = isMulti ? fileOrFiles : [fileOrFiles];
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('gu-title')?.focus(), 50);
+}
+
+async function confirmGalleryUpload() {
+  const modal = document.getElementById('gallery-upload-modal');
+  const files = modal?._files || [];
+  const title = document.getElementById('gu-title')?.value.trim() || '';
+  let folderId = document.getElementById('gu-folder')?.value;
+
+  // 폴더 미선택 시 미분류 폴더 찾기
+  if(!folderId) {
+    const uncat = galleryFolders.find(f => f.name === '미분류');
+    folderId = uncat?.id || '';
+  }
+
+  modal?.remove();
+  if(!folderId) { showToast('미분류 폴더가 없어요. 폴더를 먼저 만들어 주세요.'); return; }
+
+  showToast(`⏳ ${files.length}장 업로드 중...`);
+  for(const file of files) {
+    await uploadGalleryPhoto(folderId, file, title);
+  }
+  showToast(`✅ ${files.length}장 추가됐어요!`);
+  renderGalleryView(document.getElementById('main-content'));
+}
+
 async function pasteGalleryPhoto(folderId) {
   try {
     const items = await navigator.clipboard.read();
@@ -7215,13 +7297,19 @@ function _renderGalleryView(el) {
 function _renderGalleryFolderList(el) {
   el.innerHTML = `
     <div style="max-width:900px;margin:0 auto;padding:0 0 40px">
-      <div style="display:flex;justify-content:flex-end;margin-bottom:16px">
-        <button onclick="openCreateGalleryFolderModal()" style="background:var(--primary);color:#fff;border:none;border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer">+ 새 폴더</button>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input type="file" id="gallery-main-file-input" accept="image/*" multiple style="display:none" onchange="handleGalleryMainFileSelect(event)">
+        <button onclick="document.getElementById('gallery-main-file-input').click()" style="flex:1;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:9px;font-size:13px;cursor:pointer;color:var(--text)">📷 사진 선택</button>
+        <button onclick="pasteGalleryMain()" style="flex:1;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:9px;font-size:13px;cursor:pointer;color:var(--text)">📋 붙여넣기</button>
+        <button onclick="openCreateGalleryFolderModal()" style="background:var(--primary);color:#fff;border:none;border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer">+ 폴더</button>
       </div>
       ${galleryFolders.length === 0 ? `<div style="text-align:center;color:var(--muted);padding:60px 0;font-size:14px">폴더가 없어요. 새 폴더를 만들어보세요.</div>` : `
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
+      <div id="gallery-folder-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
         ${galleryFolders.map(f => `
-          <div onclick="openGalleryFolder('${f.id}')" style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 16px;cursor:pointer;text-align:center;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
+          <div class="gallery-folder-item" data-id="${f.id}" draggable="true"
+            onclick="openGalleryFolder('${f.id}')"
+            style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px 16px;cursor:pointer;text-align:center;transition:box-shadow .15s;user-select:none"
+            onmouseover="this.style.boxShadow='0 4px 16px rgba(0,0,0,.1)'" onmouseout="this.style.boxShadow='none'">
             <div style="font-size:36px;margin-bottom:8px">🗂️</div>
             <div style="font-size:13px;font-weight:600;color:var(--text);word-break:break-all">${f.name}</div>
             <div style="font-size:11px;color:var(--muted);margin-top:4px">${(galleryPhotos[f.id]||[]).length}장</div>
@@ -7230,6 +7318,35 @@ function _renderGalleryFolderList(el) {
         `).join('')}
       </div>`}
     </div>`;
+  initGalleryFolderDrag();
+}
+
+function initGalleryFolderDrag() {
+  const grid = document.getElementById('gallery-folder-grid');
+  if(!grid) return;
+  let dragSrc = null;
+  grid.querySelectorAll('.gallery-folder-item').forEach(item => {
+    item.addEventListener('dragstart', e => {
+      dragSrc = item;
+      e.dataTransfer.effectAllowed = 'move';
+      setTimeout(() => item.style.opacity = '0.4', 0);
+    });
+    item.addEventListener('dragend', () => { item.style.opacity = '1'; });
+    item.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; });
+    item.addEventListener('drop', async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      if(dragSrc === item) return;
+      const items = [...grid.querySelectorAll('.gallery-folder-item')];
+      const srcIdx = items.indexOf(dragSrc);
+      const tgtIdx = items.indexOf(item);
+      if(srcIdx < tgtIdx) item.after(dragSrc); else item.before(dragSrc);
+      // 순서 저장
+      const newOrder = [...grid.querySelectorAll('.gallery-folder-item')].map((el,i) => ({id: el.dataset.id, sort_order: i}));
+      galleryFolders = newOrder.map(o => galleryFolders.find(f => f.id === o.id)).filter(Boolean);
+      await Promise.all(newOrder.map(o => sbFetch('gallery_folders', 'PATCH', {sort_order: o.sort_order}, `?id=eq.${o.id}`)));
+    });
+  });
 }
 
 async function openGalleryFolder(folderId) {
