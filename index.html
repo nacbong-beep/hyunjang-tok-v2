@@ -7140,6 +7140,64 @@ async function deleteGalleryFolder(folderId) {
   renderGalleryView(document.getElementById('main-content'));
 }
 
+function searchGalleryPhotos(query) {
+  const resultsEl = document.getElementById('gallery-search-results');
+  if(!resultsEl) return;
+  if(!query.trim()) { resultsEl.style.display = 'none'; resultsEl.innerHTML = ''; return; }
+  // 전체 폴더 사진에서 검색
+  const q = query.toLowerCase();
+  const results = [];
+  Object.entries(galleryPhotos).forEach(([folderId, photos]) => {
+    const folder = galleryFolders.find(f => f.id === folderId);
+    photos.filter(p => (p.title||'').toLowerCase().includes(q)).forEach(p => {
+      results.push({...p, folderName: folder?.name || '미분류'});
+    });
+  });
+
+  if(results.length === 0) {
+    resultsEl.style.display = 'block';
+    resultsEl.innerHTML = `<div style="color:var(--muted);font-size:13px;padding:12px 0">검색 결과가 없어요.</div>`;
+    return;
+  }
+
+  resultsEl.style.display = 'block';
+  resultsEl.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:8px">${results.length}장 검색됨</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px">
+      ${results.map(p => `
+        <div style="position:relative;border-radius:10px;overflow:hidden;cursor:pointer;background:var(--surface)" onclick="openGalleryPhotoViewer('${p.file_path}')">
+          <div style="aspect-ratio:1">
+            <img data-path="${p.thumb_path||p.file_path}" class="lib-thumb" style="width:100%;height:100%;object-fit:cover">
+          </div>
+          <div style="padding:4px 6px;background:var(--card)">
+            ${p.title ? `<div style="font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.title}</div>` : ''}
+            <div style="font-size:10px;color:var(--muted)">${p.folderName}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
+
+  // lazy load
+  setTimeout(() => {
+    resultsEl.querySelectorAll('img.lib-thumb[data-path]').forEach(img => {
+      const observer = new IntersectionObserver(entries => {
+        entries.forEach(async e => {
+          if(e.isIntersecting) {
+            observer.disconnect();
+            const path = img.dataset.path;
+            const cacheKey = 'hj_thumb_cache_v1_' + path;
+            const cached = localStorage.getItem(cacheKey);
+            if(cached) { img.src = cached; return; }
+            const url = await getLibraryFileUrl(path);
+            if(url) { img.src = url; localStorage.setItem(cacheKey, url); }
+          }
+        });
+      });
+      observer.observe(img);
+    });
+  }, 50);
+}
+
 async function pasteGalleryMain() {
   try {
     const items = await navigator.clipboard.read();
@@ -7297,12 +7355,16 @@ function _renderGalleryView(el) {
 function _renderGalleryFolderList(el) {
   el.innerHTML = `
     <div style="max-width:900px;margin:0 auto;padding:0 0 40px">
-      <div style="display:flex;gap:8px;margin-bottom:12px">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
         <input type="file" id="gallery-main-file-input" accept="image/*" multiple style="display:none" onchange="handleGalleryMainFileSelect(event)">
         <button onclick="document.getElementById('gallery-main-file-input').click()" style="flex:1;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:9px;font-size:13px;cursor:pointer;color:var(--text)">📷 사진 선택</button>
         <button onclick="pasteGalleryMain()" style="flex:1;background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:9px;font-size:13px;cursor:pointer;color:var(--text)">📋 붙여넣기</button>
         <button onclick="openCreateGalleryFolderModal()" style="background:var(--primary);color:#fff;border:none;border-radius:9px;padding:9px 14px;font-size:13px;font-weight:700;cursor:pointer">+ 폴더</button>
       </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <input id="gallery-main-search" class="modal-input" placeholder="🔍 사진 제목 검색..." oninput="searchGalleryPhotos(this.value)" style="flex:1">
+      </div>
+      <div id="gallery-search-results" style="display:none;margin-bottom:16px"></div>
       ${galleryFolders.length === 0 ? `<div style="text-align:center;color:var(--muted);padding:60px 0;font-size:14px">폴더가 없어요. 새 폴더를 만들어보세요.</div>` : `
       <div id="gallery-folder-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px">
         ${galleryFolders.map(f => `
