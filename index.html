@@ -376,9 +376,11 @@ async function saveToSupabase() {
 
 async function saveRoomsToSupabase() {
   if(!rooms.length) return;
+  setSyncStatus('saving');
   try {
     await sbFetch('rooms', 'POST', rooms.map(r=>({id:r.id,name:r.name,favorite:r.favorite,archived:r.archived,sort_order:r.sortOrder})), '');
-  } catch(e) { console.error('rooms 저장 실패:', e); }
+    setSyncStatus('saved');
+  } catch(e) { console.error('rooms 저장 실패:', e); setSyncStatus('error'); }
 }
 
 async function saveMessagesToSupabase() {
@@ -395,25 +397,38 @@ async function saveTodosToSupabase() {
   } catch(e) { console.error('todos 저장 실패:', e); }
 }
 
+function setSyncStatus(status) {
+  const el = document.getElementById('header-sub');
+  if(!el) return;
+  if(status === 'saving') { el.textContent = '🔄 저장 중...'; el.style.color = 'var(--muted)'; }
+  else if(status === 'saved') { el.textContent = '✅ 클라우드 저장됨'; el.style.color = '#10b981'; setTimeout(()=>{ el.textContent = '☁️ Supabase 클라우드 저장 모드'; el.style.color = 'var(--soft)'; }, 2000); }
+  else if(status === 'error') { el.textContent = '⚠️ 저장 실패'; el.style.color = '#ef4444'; setTimeout(()=>{ el.textContent = '☁️ Supabase 클라우드 저장 모드'; el.style.color = 'var(--soft)'; }, 3000); }
+}
+
 async function saveCustomEventsToSupabase() {
   if(!customEvents.length) return;
+  setSyncStatus('saving');
   try {
-    await sbFetch('custom_events', 'POST', customEvents.map(e=>({id:e.id,title:e.title,date:e.date,end_date:e.endDate||null,tag:e.tag||'일정',color:e.color||'none',memo:e.memo||'',created_at:e.createdAt||new Date().toISOString()})), '');
-  } catch(e) { console.error('custom_events 저장 실패:', e); }
+    const result = await sbFetch('custom_events', 'POST', customEvents.map(e=>({id:e.id,title:e.title,date:e.date,end_date:e.endDate||null,tag:e.tag||'일정',color:e.color||'none',memo:e.memo||'',created_at:e.createdAt||new Date().toISOString()})), '');
+    if(result === null) { setSyncStatus('error'); showToast('⚠️ 일정 저장 실패. 네트워크를 확인해주세요.'); }
+    else setSyncStatus('saved');
+  } catch(e) { console.error('custom_events 저장 실패:', e); setSyncStatus('error'); showToast('⚠️ 일정 저장 실패.'); }
 }
 
 async function saveSettingsToSupabase() {
+  setSyncStatus('saving');
   try {
     const token = localStorage.getItem('hj_token');
     let userId = null;
     try { userId = JSON.parse(atob(token.split('.')[1])).sub; } catch(e) {}
-    if(!userId) return;
+    if(!userId) { setSyncStatus('error'); return; }
     await sbFetch('user_settings', 'POST', {
       user_id: userId,
       settings: appSettings,
       updated_at: new Date().toISOString()
     }, '?on_conflict=user_id');
-  } catch(e) { console.warn('settings save error', e); }
+    setSyncStatus('saved');
+  } catch(e) { console.warn('settings save error', e); setSyncStatus('error'); }
 }
 
 async function loadSettingsFromSupabase() {
