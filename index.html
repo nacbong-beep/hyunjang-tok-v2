@@ -7178,6 +7178,15 @@ async function confirmGalleryFolderEdit(folderId) {
   renderGalleryView(document.getElementById('main-content'));
 }
 
+function filterGalleryFolderOptions(query) {
+  const select = document.getElementById('ge-folder');
+  if(!select) return;
+  const q = query.toLowerCase();
+  [...select.options].forEach(opt => {
+    opt.style.display = opt.text.toLowerCase().includes(q) ? '' : 'none';
+  });
+}
+
 function openGalleryPhotoEdit(photoId, folderId) {
   document.getElementById('gallery-photo-menu')?.remove();
   const photo = (galleryPhotos[folderId]||[]).find(p => p.id === photoId);
@@ -7197,7 +7206,8 @@ function openGalleryPhotoEdit(photoId, folderId) {
         <textarea id="ge-memo" class="modal-input" placeholder="메모 입력" style="min-height:80px;resize:vertical">${photo.memo||''}</textarea>
       </label>
       <label class="field-label">폴더 이동
-        <select id="ge-folder" class="modal-input">
+        <input id="ge-folder-search" class="modal-input" placeholder="폴더 검색..." oninput="filterGalleryFolderOptions(this.value)" style="margin-bottom:4px">
+        <select id="ge-folder" class="modal-input" size="4" style="height:auto">
           ${galleryFolders.map(f => `<option value="${f.id}" ${f.id===folderId?'selected':''}>${f.name}</option>`).join('')}
         </select>
       </label>
