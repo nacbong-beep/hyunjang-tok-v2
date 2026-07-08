@@ -7064,9 +7064,8 @@ async function loadGalleryPhotos(folderId) {
   } catch(e) { console.error(e); }
 }
 
-async function uploadGalleryPhoto(folderId, file) {
+async function uploadGalleryPhoto(folderId, file, title='') {
   const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
-  // 1920px 이하로 리사이즈
   const resized = await resizeImage(file, 1920);
   const baseName = `gallery_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const filePath = `gallery/${baseName}.jpg`;
@@ -7087,7 +7086,7 @@ async function uploadGalleryPhoto(folderId, file) {
     });
   }
 
-  await sbFetch('gallery_photos', 'POST', [{ folder_id: folderId, file_path: filePath, thumb_path: thumbBlob ? thumbPath : null, memo: '' }]);
+  await sbFetch('gallery_photos', 'POST', [{ folder_id: folderId, file_path: filePath, thumb_path: thumbBlob ? thumbPath : null, memo: '', title: title||'' }]);
   await loadGalleryPhotos(folderId);
   renderGalleryView(document.getElementById('main-content'));
 }
@@ -7144,15 +7143,51 @@ async function pasteGalleryPhoto(folderId) {
         if(type.startsWith('image/')) {
           const blob = await item.getType(type);
           const file = new File([blob], `gallery_${Date.now()}.png`, { type });
-          showToast('⏳ 사진 업로드 중...');
-          await uploadGalleryPhoto(folderId, file);
-          showToast('✅ 사진이 추가됐어요!');
+          // 제목 입력 모달
+          openGalleryTitleModal(folderId, file);
           return;
         }
       }
     }
     showToast('클립보드에 이미지가 없어요.');
   } catch(e) { showToast('붙여넣기 권한이 필요해요.'); }
+}
+
+function openGalleryTitleModal(folderId, file) {
+  const existing = document.getElementById('gallery-title-modal');
+  if(existing) existing.remove();
+  const modal = document.createElement('div');
+  modal.id = 'gallery-title-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;padding:24px;width:90%;max-width:360px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:6px">사진 제목 (선택)</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">제목 없이도 저장할 수 있어요.</div>
+      <input id="gallery-photo-title" class="modal-input" placeholder="예: 심정펌프 설치 완료" style="width:100%;margin-bottom:16px">
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('gallery-title-modal').remove()" class="btn-ghost" style="flex:1">취소</button>
+        <button onclick="confirmGalleryPaste('${folderId}')" class="btn-primary" style="flex:1">저장</button>
+      </div>
+    </div>`;
+  modal.dataset.file = ''; // file은 클로저로 처리
+  document.body.appendChild(modal);
+  modal._file = file;
+  modal._folderId = folderId;
+  setTimeout(() => document.getElementById('gallery-photo-title')?.focus(), 50);
+  document.getElementById('gallery-photo-title').addEventListener('keydown', e => {
+    if(e.key === 'Enter') confirmGalleryPaste(folderId);
+  });
+}
+
+async function confirmGalleryPaste(folderId) {
+  const title = document.getElementById('gallery-photo-title')?.value.trim() || '';
+  const modal = document.getElementById('gallery-title-modal');
+  const file = modal?._file;
+  modal?.remove();
+  if(!file) return;
+  showToast('⏳ 사진 업로드 중...');
+  await uploadGalleryPhoto(folderId, file, title);
+  showToast('✅ 사진이 추가됐어요!');
 }
 
 function renderGalleryView(el) {
@@ -7202,10 +7237,12 @@ async function openGalleryFolder(folderId) {
 
 function _renderGalleryFolderDetail(el, folderId) {
   const folder = galleryFolders.find(f => f.id === folderId);
-  const photos = galleryPhotos[folderId] || [];
+  const allPhotos = galleryPhotos[folderId] || [];
+  const searchVal = (document.getElementById('gallery-search')?.value || '').toLowerCase();
+  const photos = searchVal ? allPhotos.filter(p => (p.title||'').toLowerCase().includes(searchVal)) : allPhotos;
   el.innerHTML = `
     <div style="max-width:900px;margin:0 auto;padding:0 0 40px">
-      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
         <button onclick="currentGalleryFolder=null;renderGalleryView(document.getElementById('main-content'))" style="background:none;border:1px solid var(--border2);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;color:var(--text)">← 목록</button>
         <span style="font-size:16px;font-weight:700;color:var(--text)">🗂️ ${folder?.name||''}</span>
         <div style="margin-left:auto;display:flex;gap:8px">
@@ -7214,11 +7251,15 @@ function _renderGalleryFolderDetail(el, folderId) {
           <button onclick="pasteGalleryPhoto('${folderId}')" style="background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:8px 14px;font-size:13px;cursor:pointer;color:var(--text)">📋 붙여넣기</button>
         </div>
       </div>
-      ${photos.length === 0 ? `<div style="text-align:center;color:var(--muted);padding:60px 0;font-size:14px">사진이 없어요. 사진을 추가해보세요.</div>` : `
+      <input id="gallery-search" class="modal-input" placeholder="🔍 사진 제목 검색..." value="${searchVal}" oninput="_renderGalleryFolderDetail(document.getElementById('main-content'),'${folderId}')" style="width:100%;margin-bottom:12px">
+      ${photos.length === 0 ? `<div style="text-align:center;color:var(--muted);padding:60px 0;font-size:14px">${searchVal ? '검색 결과가 없어요.' : '사진이 없어요. 사진을 추가해보세요.'}</div>` : `
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">
         ${photos.map(p => `
-          <div style="position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;cursor:pointer;background:var(--surface)" onclick="openGalleryPhotoViewer('${p.file_path}')">
-            <img data-path="${p.thumb_path||p.file_path}" class="lib-thumb" style="width:100%;height:100%;object-fit:cover">
+          <div style="position:relative;border-radius:10px;overflow:hidden;cursor:pointer;background:var(--surface)" onclick="openGalleryPhotoViewer('${p.file_path}')">
+            <div style="aspect-ratio:1">
+              <img data-path="${p.thumb_path||p.file_path}" class="lib-thumb" style="width:100%;height:100%;object-fit:cover">
+            </div>
+            ${p.title ? `<div style="padding:4px 8px;font-size:11px;color:var(--text);background:var(--card);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.title}</div>` : ''}
             <button onclick="event.stopPropagation();deleteGalleryPhoto('${p.id}','${folderId}')" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
           </div>
         `).join('')}
