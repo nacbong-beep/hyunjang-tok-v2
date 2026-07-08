@@ -456,7 +456,7 @@ let KR_HOLIDAYS = {
   if(cached) {
     try {
       const { data, ts } = JSON.parse(cached);
-      if(Date.now() - ts < 30*24*60*60*1000) { // 30일 캐시
+      if(Date.now() - ts < 365*24*60*60*1000) { // 1년 캐시
         KR_HOLIDAYS = { ...KR_HOLIDAYS, ...data };
       }
     } catch(e) {}
