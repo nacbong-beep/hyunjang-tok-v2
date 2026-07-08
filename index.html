@@ -439,16 +439,72 @@ const CATEGORIES = [
 const BADGE = {지시사항:'b-blue',공지사항:'b-gray',시공기준:'b-pink',자재발주:'b-green',품질관리:'b-teal',안전관리:'b-orange',하자보수:'b-yellow',일정:'b-purple',기타:'b-gray'};
 const EV_CLASS = {일정:'ev-purple',자재발주:'ev-green',지시사항:'ev-blue',품질관리:'ev-blue',하자보수:'ev-yellow',안전관리:'ev-red'};
 
-const KR_HOLIDAYS = {
+let KR_HOLIDAYS = {
   '2025-01-01':'신정','2025-01-28':'설날','2025-01-29':'설날','2025-01-30':'설날',
   '2025-03-01':'삼일절','2025-05-05':'어린이날','2025-05-06':'부처님오신날',
-  '2025-06-06':'현충일','2025-08-15':'광복절','2025-10-03':'개천절',
+  '2025-06-06':'현충일','2025-07-17':'제헌절','2025-08-15':'광복절','2025-10-03':'개천절',
   '2025-10-05':'추석','2025-10-06':'추석','2025-10-07':'추석','2025-10-09':'한글날','2025-12-25':'성탄절',
   '2026-01-01':'신정','2026-02-16':'설날','2026-02-17':'설날','2026-02-18':'설날',
   '2026-03-01':'삼일절','2026-05-05':'어린이날','2026-05-24':'부처님오신날',
-  '2026-06-06':'현충일','2026-08-15':'광복절','2026-09-24':'추석','2026-09-25':'추석','2026-09-26':'추석',
+  '2026-06-06':'현충일','2026-07-17':'제헌절','2026-08-15':'광복절','2026-09-24':'추석','2026-09-25':'추석','2026-09-26':'추석',
   '2026-10-03':'개천절','2026-10-09':'한글날','2026-12-25':'성탄절',
 };
+
+// 캐시된 공휴일 로드
+(function() {
+  const cached = localStorage.getItem('hj_holidays_cache');
+  if(cached) {
+    try {
+      const { data, ts } = JSON.parse(cached);
+      if(Date.now() - ts < 30*24*60*60*1000) { // 30일 캐시
+        KR_HOLIDAYS = { ...KR_HOLIDAYS, ...data };
+      }
+    } catch(e) {}
+  }
+})();
+
+async function fetchHolidaysFromAPI(year) {
+  const apiKey = localStorage.getItem('hj_holiday_api_key') || 'cec76bc0e43f205d776fecbe676a16e972762b6f64535963ebf2adf922684478';
+  const url = `https://apis.data.go.kr/B090041/openapi/service/SpcdeInfoService/getHoliDeInfo?serviceKey=${apiKey}&solYear=${year}&numOfRows=50&_type=json`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    const items = data?.response?.body?.items?.item;
+    if(!items) return {};
+    const list = Array.isArray(items) ? items : [items];
+    const holidays = {};
+    list.forEach(item => {
+      const d = String(item.locdate);
+      const key = `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}`;
+      holidays[key] = item.dateName;
+    });
+    return holidays;
+  } catch(e) {
+    console.warn('공휴일 API 실패:', e);
+    return {};
+  }
+}
+
+async function refreshHolidays() {
+  const thisYear = new Date().getFullYear();
+  const nextYear = thisYear + 1;
+  showToast('⏳ 공휴일 데이터 갱신 중...');
+  const [h1, h2] = await Promise.all([
+    fetchHolidaysFromAPI(thisYear),
+    fetchHolidaysFromAPI(nextYear)
+  ]);
+  const merged = { ...h1, ...h2 };
+  if(Object.keys(merged).length === 0) {
+    showToast('❌ 공휴일 데이터를 가져오지 못했어요.');
+    return;
+  }
+  KR_HOLIDAYS = { ...KR_HOLIDAYS, ...merged };
+  localStorage.setItem('hj_holidays_cache', JSON.stringify({ data: merged, ts: Date.now() }));
+  showToast(`✅ ${Object.keys(merged).length}개 공휴일 갱신 완료!`);
+  // 캘린더 새로고침
+  const el = document.getElementById('main-content');
+  if(currentView === 'calendar') renderCalendarView(el);
+}
 
 // ===== 상태 =====
 let rooms = JSON.parse(localStorage.getItem('hj3_rooms') || JSON.stringify([
@@ -7770,6 +7826,11 @@ function renderSettingsView(el) {
                 <option value="7" ${appSettings.missedDays===7?'selected':''}>최근 1주일</option>
               </select>
             </label>
+            <hr style="border:none;border-top:1px solid var(--border2);margin:4px 0">
+            <div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:6px">📅 공휴일 데이터</div>
+            <div style="font-size:11px;color:var(--muted);margin-bottom:8px">공공데이터포털 한국천문연구원 특일정보 API</div>
+            <button onclick="refreshHolidays()" class="btn-primary" style="width:100%;margin-bottom:6px">🔄 공휴일 데이터 갱신</button>
+            <div style="font-size:11px;color:var(--muted)">마지막 갱신: ${localStorage.getItem('hj_holidays_cache') ? new Date(JSON.parse(localStorage.getItem('hj_holidays_cache')).ts).toLocaleDateString('ko-KR') : '없음'}</div>
           </div>
         </div>
 
