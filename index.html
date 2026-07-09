@@ -346,13 +346,13 @@ async function loadFromSupabase() {
       sbFetch('rooms', 'GET', null, '?order=sort_order'),
       sbFetch('messages', 'GET', null, '?order=created_at.desc'),
       sbFetch('todos', 'GET', null, '?order=created_at.desc'),
-      sbFetch('custom_events', 'GET', null, '?order=date'),
+      sbFetch('custom_events', 'GET', null, '?order=sort_order.asc,date.asc'),
       userId ? sbFetch('user_settings', 'GET', null, `?user_id=eq.${userId}&select=settings&limit=1`) : Promise.resolve(null),
     ]);
     if (dbRooms) rooms = dbRooms.map(r=>({id:r.id,name:r.name,favorite:r.favorite,archived:r.archived,sortOrder:r.sort_order}));
     if (dbMsgs) messages = dbMsgs.map(m=>({id:m.id,roomName:m.room_name,tag:m.tag,sender:m.sender,summary:m.summary,content:m.content,messageDate:m.message_date,eventDate:m.event_date,createdAt:m.created_at,isTodo:m.is_todo}));
     if (dbTodos) todos = dbTodos.map(t=>({id:t.id,messageId:t.message_id,title:t.title,tag:t.tag,roomName:t.room_name,dueDate:t.due_date,done:t.done,doneAt:t.done_at}));
-    if (dbCustomEvents) customEvents = dbCustomEvents.map(e=>({id:e.id,title:e.title,date:e.date,endDate:e.end_date||null,tag:e.tag,color:e.color||'none',memo:e.memo,createdAt:e.created_at}));
+    if (dbCustomEvents) customEvents = dbCustomEvents.map(e=>({id:e.id,title:e.title,date:e.date,endDate:e.end_date||null,tag:e.tag,color:e.color||'none',memo:e.memo,createdAt:e.created_at,sortOrder:e.sort_order??0}));
     if (dbSettings && dbSettings.length && dbSettings[0].settings) {
       appSettings = {...appSettings, ...dbSettings[0].settings};
       localStorage.setItem('hj3_settings', JSON.stringify(appSettings));
@@ -409,7 +409,7 @@ async function saveCustomEventsToSupabase() {
   if(!customEvents.length) return;
   setSyncStatus('saving');
   try {
-    const result = await sbFetch('custom_events', 'POST', customEvents.map(e=>({id:e.id,title:e.title,date:e.date,end_date:e.endDate||null,tag:e.tag||'일정',color:e.color||'none',memo:e.memo||'',created_at:e.createdAt||new Date().toISOString()})), '');
+    const result = await sbFetch('custom_events', 'POST', customEvents.map(e=>({id:e.id,title:e.title,date:e.date,end_date:e.endDate||null,tag:e.tag||'일정',color:e.color||'none',memo:e.memo||'',created_at:e.createdAt||new Date().toISOString(),sort_order:e.sortOrder??0})), '');
     if(result === null) { setSyncStatus('error'); showToast('⚠️ 일정 저장 실패. 네트워크를 확인해주세요.'); }
     else setSyncStatus('saved');
   } catch(e) { console.error('custom_events 저장 실패:', e); setSyncStatus('error'); showToast('⚠️ 일정 저장 실패.'); }
@@ -961,19 +961,12 @@ function calendarCard() {
           const dayEvents=events.filter(e=>e.date===dk);
           const dayCustom=getCustomEventsForDate(dk);
 
-          // 저장된 순서 적용해서 합치기
-          const orderKey = 'hj3_order_'+dk;
-          const savedOrder = JSON.parse(localStorage.getItem(orderKey)||'[]');
+          // sort_order 기준으로 합치기
           let allDayItems = [
-            ...dayEvents.map(e=>({type:'msg',id:e.id,tag:e.tag,title:e.title})),
-            ...dayCustom.filter(e=>!/^(휴무|근무)/.test(e.title.trim())).map(e=>({type:'custom',id:e.id,tag:e.tag||'일정',title:e.title,memo:e.memo,color:e.color||'none'}))
+            ...dayEvents.map(e=>({type:'msg',id:e.id,tag:e.tag,title:e.title,sortOrder:e.sortOrder??0})),
+            ...dayCustom.filter(e=>!/^(휴무|근무)/.test(e.title.trim())).map(e=>({type:'custom',id:e.id,tag:e.tag||'일정',title:e.title,memo:e.memo,color:e.color||'none',sortOrder:e.sortOrder??0}))
           ];
-          if(savedOrder.length) {
-            allDayItems.sort((a,b)=>{
-              const ai=savedOrder.indexOf(a.id); const bi=savedOrder.indexOf(b.id);
-              return (ai===-1?999:ai)-(bi===-1?999:bi);
-            });
-          }
+          allDayItems.sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0));
           const isToday=isSameDay(date,new Date());
           const isSun=i%7===0;
           const holiday = appSettings.showHoliday!==false ? getHoliday(y,mo,date.getDate()) : null;
@@ -1214,7 +1207,7 @@ function renderCalendarView(el) {
 
     const fetchWeather = async () => {
       const wd = {};
-      const commonParams = `latitude=36.9923&longitude=127.0892&daily=weather_code,precipitation_sum&timezone=Asia/Seoul`;
+      const commonParams = `latitude=36.9923&longitude=127.0892&daily=weathercode,precipitation_sum&timezone=Asia/Seoul`;
 
       // 과거 구간
       if(startDate <= todayStr) {
@@ -1224,7 +1217,7 @@ function renderCalendarView(el) {
           const r = await fetch(`https://archive-api.open-meteo.com/v1/archive?${commonParams}&start_date=${startDate}&end_date=${pastEnd}`);
           const d = await r.json();
           (d.daily?.time||[]).forEach((date,i) => {
-            wd[date] = { code: d.daily.weather_code[i], rain: d.daily.precipitation_sum[i] };
+            wd[date] = { code: d.daily.weathercode[i], rain: d.daily.precipitation_sum[i] };
           });
         } catch(e) {}
       }
@@ -1235,7 +1228,7 @@ function renderCalendarView(el) {
           const r = await fetch(`https://api.open-meteo.com/v1/forecast?${commonParams}&start_date=${futureStart}&end_date=${endDate}`);
           const d = await r.json();
           (d.daily?.time||[]).forEach((date,i) => {
-            wd[date] = { code: d.daily.weather_code[i], rain: d.daily.precipitation_sum[i] };
+            wd[date] = { code: d.daily.weathercode[i], rain: d.daily.precipitation_sum[i] };
           });
         } catch(e) {}
       }
@@ -1282,13 +1275,11 @@ function renderCalendarView(el) {
           const isWorkSat=allDayCustom.some(e=>/^근무/.test(e.title.trim()))&&date.getDay()===6;
           const hasCustom=allDayCustom.length>0;
           // 단일 날짜 일정만 셀 안에 표시
-          const orderKey='hj3_order_'+dk;
-          const savedOrder=JSON.parse(localStorage.getItem(orderKey)||'[]');
           let singleItems=[
-            ...dayEvents.map(e=>({type:'msg',id:e.id,tag:e.tag,title:e.title})),
-            ...dayCustomSingle.map(e=>({type:'custom',id:e.id,tag:e.tag||'일정',title:e.title,memo:e.memo,color:e.color||'none'}))
+            ...dayEvents.map(e=>({type:'msg',id:e.id,tag:e.tag,title:e.title,sortOrder:e.sortOrder??0})),
+            ...dayCustomSingle.map(e=>({type:'custom',id:e.id,tag:e.tag||'일정',title:e.title,memo:e.memo,color:e.color||'none',sortOrder:e.sortOrder??0}))
           ];
-          if(savedOrder.length){singleItems.sort((a,b)=>{const ai=savedOrder.indexOf(a.id);const bi=savedOrder.indexOf(b.id);return(ai===-1?999:ai)-(bi===-1?999:bi);});}
+          singleItems.sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0));
           return `<div class="cal-cell ${isToday?'today':''} ${isSun?'sunday':''} ${holiday?'holiday':''} ${isOffDay?'off-day':''} ${hasCustom&&!isOffDay&&!isWorkSat?'has-custom':''}" data-dk="${dk}" onclick="handleDayClick('${dk}')">
             <div class="cal-date" style="${isOffDay?'color:#ef4444':''}">
               <span>${date.getDate()}</span>${isOffDay?'<span style="font-size:11px;color:#ef4444;font-weight:900;margin-left:3px">휴무</span>':''}${isWorkSat?'<span style="font-size:11px;color:#0f766e;font-weight:900;margin-left:3px">근무</span>':''}${holiday?`<span class="holiday-name" style="display:inline;margin-left:3px;margin-bottom:0">${holiday}</span>`:''}${(()=>{const w=weatherData[dk];if(!w) return '';const isRain=[61,63,65,80,81,82,95,96,99].includes(w.code)||(w.rain>=5.0);const isSnow=[71,73,75].includes(w.code);return isRain?'<span style="font-size:13px;margin-left:3px" title="우천">🌧️</span>':isSnow?'<span style="font-size:13px;margin-left:3px" title="눈">❄️</span>':''})()}
@@ -2896,12 +2887,12 @@ async function loadWeatherForWeek(days) {
     const startDate = days[0].key;
     const endDate = days[days.length-1].key;
     // 평택 장안동 위경도
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=36.9923&longitude=127.0892&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia/Seoul&start_date=${startDate}&end_date=${endDate}`);
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=36.9923&longitude=127.0892&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=Asia/Seoul&start_date=${startDate}&end_date=${endDate}`);
     if(!res.ok) return null;
     const data = await res.json();
     const result = {};
     data.daily.time.forEach((date, i) => {
-      const code = data.daily.weather_code[i];
+      const code = data.daily.weathercode[i];
       const max = Math.round(data.daily.temperature_2m_max[i]);
       const min = Math.round(data.daily.temperature_2m_min[i]);
       const icon = WEATHER_ICONS[code] || '🌡️';
@@ -3347,16 +3338,10 @@ function weeklyDayTabsHTML(days, selIdx) {
 function weeklyDayCardBodyHTML(wk, days, dIdx, weatherData) {
   const d = days[dIdx];
   const autoWeather = weatherData && weatherData[d.key] ? weatherData[d.key] : '-';
-  const savedOrder = JSON.parse(localStorage.getItem('hj3_order_'+d.key)||'[]');
-  const msgEvents = messages.filter(m=>(m.eventDate||m.messageDate)===d.key&&normalizeTag(m.tag)==='일정').map(m=>({id:m.id, text:m.summary, isMsg:true}));
-  const customEventsDay = customEvents.filter(e=>{const s=e.date,en=e.endDate||e.date;return d.key>=s&&d.key<=en;}).map(e=>({id:e.id, text:e.title, color:e.color}));
+  const msgEvents = messages.filter(m=>(m.eventDate||m.messageDate)===d.key&&normalizeTag(m.tag)==='일정').map(m=>({id:m.id, text:m.summary, isMsg:true, sortOrder:m.sortOrder??0}));
+  const customEventsDay = customEvents.filter(e=>{const s=e.date,en=e.endDate||e.date;return d.key>=s&&d.key<=en;}).map(e=>({id:e.id, text:e.title, color:e.color, sortOrder:e.sortOrder??0}));
   let dayEvents = [...msgEvents, ...customEventsDay];
-  if(savedOrder.length) {
-    dayEvents.sort((a,b)=>{
-      const ai=savedOrder.indexOf(a.id); const bi=savedOrder.indexOf(b.id);
-      return (ai===-1?999:ai)-(bi===-1?999:bi);
-    });
-  }
+  dayEvents.sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0));
   const editRows = ['작업사항','검측사항','확인사항','서류사항','기타'];
 
   return `
@@ -3436,11 +3421,10 @@ function renderWeeklyTableSection(wk, days, weatherData) {
                 }
 
                 if(isSchedule) {
-                  const savedOrderT = JSON.parse(localStorage.getItem('hj3_order_'+d.key)||'[]');
-                  const msgEventsT = messages.filter(m=>(m.eventDate||m.messageDate)===d.key&&normalizeTag(m.tag)==='일정').map(m=>({id:m.id, text:m.summary, isMsg:true}));
-                  const customEventsDayT = customEvents.filter(e=>{const s=e.date,en=e.endDate||e.date;return d.key>=s&&d.key<=en;}).map(e=>({id:e.id, text:e.title, color:e.color}));
+                  const msgEventsT = messages.filter(m=>(m.eventDate||m.messageDate)===d.key&&normalizeTag(m.tag)==='일정').map(m=>({id:m.id, text:m.summary, isMsg:true, sortOrder:m.sortOrder??0}));
+                  const customEventsDayT = customEvents.filter(e=>{const s=e.date,en=e.endDate||e.date;return d.key>=s&&d.key<=en;}).map(e=>({id:e.id, text:e.title, color:e.color, sortOrder:e.sortOrder??0}));
                   const dayEvents = [...msgEventsT, ...customEventsDayT];
-                  if(savedOrderT.length) dayEvents.sort((a,b)=>{const ai=savedOrderT.indexOf(a.id);const bi=savedOrderT.indexOf(b.id);return(ai===-1?999:ai)-(bi===-1?999:bi);});
+                  dayEvents.sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0));
                   return `<td style="padding:8px 8px;vertical-align:top;border-bottom:1px solid var(--border);border-right:1px solid var(--border);background:${cellBg};height:${ROW_H}">
                     ${dayEvents.length
                       ? dayEvents.map(e=>{
@@ -5608,12 +5592,13 @@ async function confirmSavePersonalEvent(editId) {
     await savePersonalEvent({ title, date, end_date, memo, color: finalColor });
     // 휴무면 customEvents에도 동시 저장
     if(isOffDay) {
-      const newEv = {id:uid(), title, date, endDate: end_date||null, tag:'일정', color:'#ef4444', memo, createdAt: new Date().toISOString()};
+      const maxOrder = customEvents.filter(e=>e.date===date).reduce((mx,e)=>Math.max(mx,(e.sortOrder??0)),0);
+      const newEv = {id:uid(), title, date, endDate: end_date||null, tag:'일정', color:'#ef4444', memo, createdAt: new Date().toISOString(), sortOrder: maxOrder+1};
       customEvents.push(newEv);
       save();
       // Supabase에 직접 insert
       await sbFetch('custom_events', 'POST', [{
-        id: newEv.id, title, date, end_date: end_date||null, tag:'일정', color:'#ef4444', memo, created_at: newEv.createdAt
+        id: newEv.id, title, date, end_date: end_date||null, tag:'일정', color:'#ef4444', memo, created_at: newEv.createdAt, sort_order: newEv.sortOrder
       }]);
     }
     showToast('✅ 추가됐어요.');
@@ -8152,16 +8137,8 @@ function handleDayClick(dateStr) {
     ...dayCustom.map(e=>({type:'custom', id:e.id, tag:normalizeTag(e.tag||'일정'), title:e.title, sub:e.memo||'', color:e.color||'none', data:e}))
   ];
 
-  // 저장된 순서 적용
-  const orderKey = 'hj3_order_'+dateStr;
-  const savedOrder = JSON.parse(localStorage.getItem(orderKey)||'[]');
-  if(savedOrder.length) {
-    allItems.sort((a,b)=>{
-      const ai = savedOrder.indexOf(a.id);
-      const bi = savedOrder.indexOf(b.id);
-      return (ai===-1?999:ai)-(bi===-1?999:bi);
-    });
-  }
+  // sort_order 기준 정렬
+  allItems.sort((a,b)=>(a.data?.sortOrder??a.sortOrder??0)-(b.data?.sortOrder??b.sortOrder??0));
 
   allItems.forEach((item,i)=>{
     const tag = item.tag;
@@ -8214,48 +8191,41 @@ function onDayDragEnd(e, dateStr) {
   // drop이 처리됨
 }
 
-function onDayDrop(e, toIdx, dateStr) {
+async function onDayDrop(e, toIdx, dateStr) {
   e.preventDefault();
   if(dragFromIdx===null || dragFromIdx===toIdx) { dragFromIdx=null; return; }
 
-  // 해당 날짜 모든 아이템 수집
+  // 해당 날짜 모든 아이템 수집 (현재 sort_order 기준 정렬)
   const dayMsgs = messages.filter(m=>(m.eventDate||m.messageDate)===dateStr&&normalizeTag(m.tag)==='일정');
   const dayCustom = customEvents.filter(ev=>ev.date===dateStr);
-  let allIds = [
-    ...dayMsgs.map(m=>m.id),
-    ...dayCustom.map(ev=>ev.id)
+  let allItems = [
+    ...dayMsgs.map(m=>({id:m.id, isCustom:false, sortOrder:m.sortOrder??0})),
+    ...dayCustom.map(ev=>({id:ev.id, isCustom:true, sortOrder:ev.sortOrder??0}))
   ];
-
-  // 저장된 순서 있으면 적용
-  const orderKey = 'hj3_order_'+dateStr;
-  const savedOrder = JSON.parse(localStorage.getItem(orderKey)||'[]');
-  if(savedOrder.length) {
-    allIds.sort((a,b)=>{
-      const ai=savedOrder.indexOf(a); const bi=savedOrder.indexOf(b);
-      return (ai===-1?999:ai)-(bi===-1?999:bi);
-    });
-  }
+  allItems.sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0));
 
   // 순서 변경
-  const moved = allIds.splice(dragFromIdx,1)[0];
-  allIds.splice(toIdx,0,moved);
+  const moved = allItems.splice(dragFromIdx,1)[0];
+  allItems.splice(toIdx,0,moved);
   dragFromIdx = null;
 
-  // localStorage에 저장
-  localStorage.setItem(orderKey, JSON.stringify(allIds));
-
-  // customEvents 배열 순서도 반영
-  const customOrder = allIds.filter(id => customEvents.find(e=>e.id===id));
-  customEvents.sort((a,b)=>{
-    const ai = customOrder.indexOf(a.id);
-    const bi = customOrder.indexOf(b.id);
-    if(ai===-1&&bi===-1) return 0;
-    if(ai===-1) return 1;
-    if(bi===-1) return -1;
-    return ai-bi;
+  // 메모리 반영
+  allItems.forEach((item,i)=>{
+    if(item.isCustom) {
+      const ev = customEvents.find(e=>e.id===item.id);
+      if(ev) ev.sortOrder = i;
+    } else {
+      const msg = messages.find(m=>m.id===item.id);
+      if(msg) msg.sortOrder = i;
+    }
   });
 
-  save(); saveCustomEventsToSupabase();
+  // Supabase에 custom_events sort_order 업데이트
+  const customUpdates = allItems.filter(item=>item.isCustom);
+  await Promise.all(customUpdates.map((item,_)=>
+    sbFetch('custom_events','PATCH',{sort_order: allItems.indexOf(item)},`?id=eq.${item.id}`)
+  ));
+
   handleDayClick(dateStr);
   // 캘린더 셀도 즉시 갱신
   const el = document.getElementById('main-content');
@@ -8385,7 +8355,8 @@ function saveCustomEvent() {
     customEvents = customEvents.map(e=>e.id===editingEventId?{...e,title,date,endDate:endDate||null,tag,color,memo}:e);
     showToast('✅ 일정이 수정됐어요!');
   } else {
-    customEvents.push({id:uid(),title,date,endDate:endDate||null,tag,color,memo,createdAt:new Date().toISOString()});
+    const maxOrder = customEvents.filter(e=>e.date===date).reduce((mx,e)=>Math.max(mx,(e.sortOrder??0)),0);
+    customEvents.push({id:uid(),title,date,endDate:endDate||null,tag,color,memo,createdAt:new Date().toISOString(),sortOrder:maxOrder+1});
     showToast('✅ 일정이 추가됐어요!');
   }
   save(); saveCustomEventsToSupabase();
