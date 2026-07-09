@@ -1214,7 +1214,7 @@ function renderCalendarView(el) {
 
     const fetchWeather = async () => {
       const wd = {};
-      const commonParams = `latitude=36.9923&longitude=127.0892&daily=weathercode,precipitation_sum&timezone=Asia/Seoul`;
+      const commonParams = `latitude=36.9923&longitude=127.0892&daily=weather_code,precipitation_sum&timezone=Asia/Seoul`;
 
       // 과거 구간
       if(startDate <= todayStr) {
@@ -1224,7 +1224,7 @@ function renderCalendarView(el) {
           const r = await fetch(`https://archive-api.open-meteo.com/v1/archive?${commonParams}&start_date=${startDate}&end_date=${pastEnd}`);
           const d = await r.json();
           (d.daily?.time||[]).forEach((date,i) => {
-            wd[date] = { code: d.daily.weathercode[i], rain: d.daily.precipitation_sum[i] };
+            wd[date] = { code: d.daily.weather_code[i], rain: d.daily.precipitation_sum[i] };
           });
         } catch(e) {}
       }
@@ -1235,7 +1235,7 @@ function renderCalendarView(el) {
           const r = await fetch(`https://api.open-meteo.com/v1/forecast?${commonParams}&start_date=${futureStart}&end_date=${endDate}`);
           const d = await r.json();
           (d.daily?.time||[]).forEach((date,i) => {
-            wd[date] = { code: d.daily.weathercode[i], rain: d.daily.precipitation_sum[i] };
+            wd[date] = { code: d.daily.weather_code[i], rain: d.daily.precipitation_sum[i] };
           });
         } catch(e) {}
       }
@@ -2896,12 +2896,12 @@ async function loadWeatherForWeek(days) {
     const startDate = days[0].key;
     const endDate = days[days.length-1].key;
     // 평택 장안동 위경도
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=36.9923&longitude=127.0892&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=Asia/Seoul&start_date=${startDate}&end_date=${endDate}`);
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=36.9923&longitude=127.0892&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia/Seoul&start_date=${startDate}&end_date=${endDate}`);
     if(!res.ok) return null;
     const data = await res.json();
     const result = {};
     data.daily.time.forEach((date, i) => {
-      const code = data.daily.weathercode[i];
+      const code = data.daily.weather_code[i];
       const max = Math.round(data.daily.temperature_2m_max[i]);
       const min = Math.round(data.daily.temperature_2m_min[i]);
       const icon = WEATHER_ICONS[code] || '🌡️';
