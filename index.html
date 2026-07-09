@@ -1207,7 +1207,7 @@ function renderCalendarView(el) {
 
     const fetchWeather = async () => {
       const wd = {};
-      const commonParams = `latitude=36.9923&longitude=127.0892&daily=weathercode,precipitation_sum&timezone=Asia/Seoul`;
+      const commonParams = `latitude=36.9923&longitude=127.0892&daily=weather_code,precipitation_sum&timezone=Asia/Seoul`;
 
       // 과거 구간
       if(startDate <= todayStr) {
@@ -1217,7 +1217,7 @@ function renderCalendarView(el) {
           const r = await fetch(`https://archive-api.open-meteo.com/v1/archive?${commonParams}&start_date=${startDate}&end_date=${pastEnd}`);
           const d = await r.json();
           (d.daily?.time||[]).forEach((date,i) => {
-            wd[date] = { code: d.daily.weathercode[i], rain: d.daily.precipitation_sum[i] };
+            wd[date] = { code: d.daily.weather_code[i], rain: d.daily.precipitation_sum[i] };
           });
         } catch(e) {}
       }
@@ -1228,7 +1228,7 @@ function renderCalendarView(el) {
           const r = await fetch(`https://api.open-meteo.com/v1/forecast?${commonParams}&start_date=${futureStart}&end_date=${endDate}`);
           const d = await r.json();
           (d.daily?.time||[]).forEach((date,i) => {
-            wd[date] = { code: d.daily.weathercode[i], rain: d.daily.precipitation_sum[i] };
+            wd[date] = { code: d.daily.weather_code[i], rain: d.daily.precipitation_sum[i] };
           });
         } catch(e) {}
       }
@@ -2887,12 +2887,12 @@ async function loadWeatherForWeek(days) {
     const startDate = days[0].key;
     const endDate = days[days.length-1].key;
     // 평택 장안동 위경도
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=36.9923&longitude=127.0892&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=Asia/Seoul&start_date=${startDate}&end_date=${endDate}`);
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=36.9923&longitude=127.0892&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia/Seoul&start_date=${startDate}&end_date=${endDate}`);
     if(!res.ok) return null;
     const data = await res.json();
     const result = {};
     data.daily.time.forEach((date, i) => {
-      const code = data.daily.weathercode[i];
+      const code = data.daily.weather_code[i];
       const max = Math.round(data.daily.temperature_2m_max[i]);
       const min = Math.round(data.daily.temperature_2m_min[i]);
       const icon = WEATHER_ICONS[code] || '🌡️';
@@ -5592,13 +5592,12 @@ async function confirmSavePersonalEvent(editId) {
     await savePersonalEvent({ title, date, end_date, memo, color: finalColor });
     // 휴무면 customEvents에도 동시 저장
     if(isOffDay) {
-      const maxOrder = customEvents.filter(e=>e.date===date).reduce((mx,e)=>Math.max(mx,(e.sortOrder??0)),0);
-      const newEv = {id:uid(), title, date, endDate: end_date||null, tag:'일정', color:'#ef4444', memo, createdAt: new Date().toISOString(), sortOrder: maxOrder+1};
+      const newEv = {id:uid(), title, date, endDate: end_date||null, tag:'일정', color:'#ef4444', memo, createdAt: new Date().toISOString()};
       customEvents.push(newEv);
       save();
       // Supabase에 직접 insert
       await sbFetch('custom_events', 'POST', [{
-        id: newEv.id, title, date, end_date: end_date||null, tag:'일정', color:'#ef4444', memo, created_at: newEv.createdAt, sort_order: newEv.sortOrder
+        id: newEv.id, title, date, end_date: end_date||null, tag:'일정', color:'#ef4444', memo, created_at: newEv.createdAt
       }]);
     }
     showToast('✅ 추가됐어요.');
@@ -8138,17 +8137,17 @@ function handleDayClick(dateStr) {
   ];
 
   // sort_order 기준 정렬
-  allItems.sort((a,b)=>(a.data?.sortOrder??a.sortOrder??0)-(b.data?.sortOrder??b.sortOrder??0));
+  allItems.sort((a,b)=>(a.data?.sortOrder??0)-(b.data?.sortOrder??0));
 
   allItems.forEach((item,i)=>{
     const tag = item.tag;
     html+=`<div class="day-drag-item" draggable="true" data-idx="${i}"
       ondragstart="onDayDragStart(event,${i})"
-      ondragover="onDayDragOver(event,${i},'${dateStr}')"
+      ondragover="onDayDragOver(event,${i})"
       ondrop="onDayDrop(event,${i},'${dateStr}')"
-      ondragend="onDayDragEnd(event,'${dateStr}')"
-      style="margin-bottom:8px;border:1px solid var(--border);border-left:3px solid ${/^휴무/.test((item.title||'').trim())?'#ef4444':(item.title||'').includes('타설')?'#f5c518':item.type==='custom'&&item.color&&item.color!=='none'?item.color:item.type==='custom'?'#3b82f6':'#7c3aed'};border-radius:8px;padding:12px;background:${/^휴무/.test((item.title||'').trim())?'#fff0f0':(item.title||'').includes('타설')?'#fffbe6':item.type==='custom'&&item.color&&item.color!=='none'?item.color+'11':'var(--surface)'};display:flex;align-items:flex-start;gap:8px;cursor:grab;transition:opacity 0.15s">
-      <span style="font-size:14px;color:var(--soft);margin-top:2px">⠿</span>
+      ondragend="onDayDragEnd(event)"
+      style="margin-bottom:8px;border:1px solid var(--border);border-left:3px solid ${/^휴무/.test((item.title||'').trim())?'#ef4444':(item.title||'').includes('타설')?'#f5c518':item.type==='custom'&&item.color&&item.color!=='none'?item.color:item.type==='custom'?'#3b82f6':'#7c3aed'};border-radius:8px;padding:12px;background:${/^휴무/.test((item.title||'').trim())?'#fff0f0':(item.title||'').includes('타설')?'#fffbe6':item.type==='custom'&&item.color&&item.color!=='none'?item.color+'11':'var(--surface)'};display:flex;align-items:flex-start;gap:8px;transition:opacity 0.15s">
+      <span class="drag-handle" style="font-size:14px;color:var(--soft);margin-top:2px;cursor:grab;touch-action:none;padding:2px 4px;">⠿</span>
       <div style="flex:1;cursor:pointer" onclick="closeDayModal();${item.type==='custom'?`openEditEventModal('${item.id}')`:`openEditMsgEvent('${item.id}')`}">
         <span class="badge ${badgeClass(tag)}">${tagIcon(tag)} ${tag} ✏️</span>
         <div class="item-title" style="font-size:13px;margin-top:4px">${item.title}</div>
@@ -8159,43 +8158,19 @@ function handleDayClick(dateStr) {
   document.getElementById('day-modal-list').innerHTML = html;
   document.getElementById('day-modal-date').value = dateStr;
   document.getElementById('day-modal').style.display = 'flex';
+  initDayTouchDrag(dateStr);
 }
 
 function closeDayModal() {
   document.getElementById('day-modal').style.display = 'none';
 }
 
-let dragEventId = null;
 let dragFromIdx = null;
 
-function onDayDragStart(e, idx) {
-  dragFromIdx = idx;
-  e.target.style.opacity = '0.4';
-}
+// ── 공통: 드롭 처리 ──────────────────────────────
+async function applyDayDrop(fromIdx, toIdx, dateStr) {
+  if(fromIdx===null || fromIdx===toIdx) return;
 
-function onDayDragOver(e, idx, dateStr) {
-  e.preventDefault();
-  if(dragFromIdx === null || dragFromIdx === idx) return;
-  // 시각적 피드백
-  document.querySelectorAll('.day-drag-item').forEach((el,i)=>{
-    el.style.borderTop = i===idx ? '2px solid #3b82f6' : '';
-  });
-}
-
-function onDayDragEnd(e, dateStr) {
-  e.target.style.opacity = '1';
-  document.querySelectorAll('.day-drag-item').forEach(el=>{
-    el.style.borderTop = '';
-    el.style.opacity = '1';
-  });
-  // drop이 처리됨
-}
-
-async function onDayDrop(e, toIdx, dateStr) {
-  e.preventDefault();
-  if(dragFromIdx===null || dragFromIdx===toIdx) { dragFromIdx=null; return; }
-
-  // 해당 날짜 모든 아이템 수집 (현재 sort_order 기준 정렬)
   const dayMsgs = messages.filter(m=>(m.eventDate||m.messageDate)===dateStr&&normalizeTag(m.tag)==='일정');
   const dayCustom = customEvents.filter(ev=>ev.date===dateStr);
   let allItems = [
@@ -8204,33 +8179,119 @@ async function onDayDrop(e, toIdx, dateStr) {
   ];
   allItems.sort((a,b)=>(a.sortOrder??0)-(b.sortOrder??0));
 
-  // 순서 변경
-  const moved = allItems.splice(dragFromIdx,1)[0];
+  const moved = allItems.splice(fromIdx,1)[0];
   allItems.splice(toIdx,0,moved);
-  dragFromIdx = null;
 
   // 메모리 반영
   allItems.forEach((item,i)=>{
-    if(item.isCustom) {
-      const ev = customEvents.find(e=>e.id===item.id);
-      if(ev) ev.sortOrder = i;
-    } else {
-      const msg = messages.find(m=>m.id===item.id);
-      if(msg) msg.sortOrder = i;
-    }
+    if(item.isCustom) { const ev=customEvents.find(e=>e.id===item.id); if(ev) ev.sortOrder=i; }
+    else { const msg=messages.find(m=>m.id===item.id); if(msg) msg.sortOrder=i; }
   });
 
-  // Supabase에 custom_events sort_order 업데이트
+  // Supabase 업데이트 (custom_events만)
   const customUpdates = allItems.filter(item=>item.isCustom);
   await Promise.all(customUpdates.map((item,_)=>
-    sbFetch('custom_events','PATCH',{sort_order: allItems.indexOf(item)},`?id=eq.${item.id}`)
+    sbFetch('custom_events','PATCH',{sort_order:allItems.indexOf(item)},`?id=eq.${item.id}`)
   ));
 
   handleDayClick(dateStr);
-  // 캘린더 셀도 즉시 갱신
   const el = document.getElementById('main-content');
   if(currentView==='calendar') renderCalendarView(el);
   else if(currentView==='dashboard') renderDashboard(el);
+}
+
+// ── PC: HTML Drag API ────────────────────────────
+function onDayDragStart(e, idx) {
+  dragFromIdx = idx;
+  e.target.closest('.day-drag-item').style.opacity = '0.4';
+}
+
+function onDayDragOver(e, idx) {
+  e.preventDefault();
+  if(dragFromIdx===null||dragFromIdx===idx) return;
+  document.querySelectorAll('.day-drag-item').forEach((el,i)=>{
+    el.style.borderTop = i===idx ? '2px solid var(--primary)' : '';
+  });
+}
+
+function onDayDragEnd(e) {
+  e.target.closest('.day-drag-item').style.opacity='1';
+  document.querySelectorAll('.day-drag-item').forEach(el=>{ el.style.borderTop=''; el.style.opacity='1'; });
+}
+
+async function onDayDrop(e, toIdx, dateStr) {
+  e.preventDefault();
+  const from = dragFromIdx;
+  dragFromIdx = null;
+  document.querySelectorAll('.day-drag-item').forEach(el=>{ el.style.borderTop=''; el.style.opacity='1'; });
+  await applyDayDrop(from, toIdx, dateStr);
+}
+
+// ── 모바일: Touch Drag ───────────────────────────
+let _touchDragIdx = null;
+let _touchDateStr = null;
+let _touchGhost = null;
+let _touchItems = null;
+
+function initDayTouchDrag(dateStr) {
+  const list = document.getElementById('day-modal-list');
+  if(!list) return;
+
+  list.addEventListener('touchstart', e=>{
+    const item = e.target.closest('.day-drag-item');
+    if(!item) return;
+    const handle = e.target.closest('.drag-handle');
+    if(!handle) return;
+    e.preventDefault();
+
+    _touchDateStr = dateStr;
+    _touchItems = [...list.querySelectorAll('.day-drag-item')];
+    _touchDragIdx = _touchItems.indexOf(item);
+
+    // 고스트 생성
+    _touchGhost = item.cloneNode(true);
+    _touchGhost.style.cssText = `position:fixed;opacity:0.75;pointer-events:none;z-index:9999;width:${item.offsetWidth}px;box-shadow:0 4px 16px rgba(0,0,0,0.2);border-radius:8px;`;
+    document.body.appendChild(_touchGhost);
+    item.style.opacity = '0.3';
+
+    const t = e.touches[0];
+    _touchGhost.style.left = (t.clientX - item.offsetWidth/2) + 'px';
+    _touchGhost.style.top  = (t.clientY - item.offsetHeight/2) + 'px';
+  }, {passive:false});
+
+  list.addEventListener('touchmove', e=>{
+    if(_touchDragIdx===null||!_touchGhost) return;
+    e.preventDefault();
+    const t = e.touches[0];
+    const item = _touchItems[_touchDragIdx];
+    _touchGhost.style.left = (t.clientX - item.offsetWidth/2) + 'px';
+    _touchGhost.style.top  = (t.clientY - item.offsetHeight/2) + 'px';
+
+    // 현재 위치의 타깃 아이템 찾기
+    _touchGhost.style.display='none';
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    _touchGhost.style.display='';
+    const target = el?.closest('.day-drag-item');
+    _touchItems.forEach(it=>{ it.style.borderTop = (target&&it===target&&_touchItems.indexOf(it)!==_touchDragIdx)?'2px solid var(--primary)':''; });
+  }, {passive:false});
+
+  list.addEventListener('touchend', async e=>{
+    if(_touchDragIdx===null||!_touchGhost) return;
+    const t = e.changedTouches[0];
+    _touchGhost.remove(); _touchGhost=null;
+    _touchItems.forEach(it=>{ it.style.borderTop=''; it.style.opacity=''; });
+
+    _touchGhost=null;
+    const el = document.elementFromPoint(t.clientX, t.clientY);
+    const target = el?.closest('.day-drag-item');
+    const toIdx = target ? _touchItems.indexOf(target) : null;
+    const fromIdx = _touchDragIdx;
+    _touchDragIdx=null;
+
+    if(toIdx!==null && toIdx!==fromIdx) {
+      await applyDayDrop(fromIdx, toIdx, _touchDateStr);
+    }
+  });
 }
 
 function applyRoomCalLayout() {
@@ -8355,8 +8416,7 @@ function saveCustomEvent() {
     customEvents = customEvents.map(e=>e.id===editingEventId?{...e,title,date,endDate:endDate||null,tag,color,memo}:e);
     showToast('✅ 일정이 수정됐어요!');
   } else {
-    const maxOrder = customEvents.filter(e=>e.date===date).reduce((mx,e)=>Math.max(mx,(e.sortOrder??0)),0);
-    customEvents.push({id:uid(),title,date,endDate:endDate||null,tag,color,memo,createdAt:new Date().toISOString(),sortOrder:maxOrder+1});
+    customEvents.push({id:uid(),title,date,endDate:endDate||null,tag,color,memo,createdAt:new Date().toISOString()});
     showToast('✅ 일정이 추가됐어요!');
   }
   save(); saveCustomEventsToSupabase();
