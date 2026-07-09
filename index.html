@@ -1218,7 +1218,8 @@ function renderCalendarView(el) {
 
       // 과거 구간
       if(startDate <= todayStr) {
-        const pastEnd = endDate < todayStr ? endDate : todayStr;
+        const yesterday = addDaysKey(-1);
+        const pastEnd = endDate < yesterday ? endDate : yesterday;
         try {
           const r = await fetch(`https://archive-api.open-meteo.com/v1/archive?${commonParams}&start_date=${startDate}&end_date=${pastEnd}`);
           const d = await r.json();
