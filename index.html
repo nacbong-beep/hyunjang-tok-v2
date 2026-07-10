@@ -350,7 +350,7 @@ async function loadFromSupabase() {
       userId ? sbFetch('user_settings', 'GET', null, `?user_id=eq.${userId}&select=settings&limit=1`) : Promise.resolve(null),
     ]);
     if (dbRooms) rooms = dbRooms.map(r=>({id:r.id,name:r.name,favorite:r.favorite,archived:r.archived,sortOrder:r.sort_order}));
-    if (dbMsgs) messages = dbMsgs.map(m=>({id:m.id,roomName:m.room_name,tag:m.tag,sender:m.sender,summary:m.summary,content:m.content,messageDate:m.message_date,eventDate:m.event_date,createdAt:m.created_at,isTodo:m.is_todo}));
+    if (dbMsgs) messages = dbMsgs.map(m=>({id:m.id,roomName:m.room_name,tag:m.tag,sender:m.sender,summary:m.summary,content:m.content,messageDate:m.message_date,eventDate:m.event_date,createdAt:m.created_at,isTodo:m.is_todo,sortOrder:m.sort_order??0}));
     if (dbTodos) todos = dbTodos.map(t=>({id:t.id,messageId:t.message_id,title:t.title,tag:t.tag,roomName:t.room_name,dueDate:t.due_date,done:t.done,doneAt:t.done_at}));
     if (dbCustomEvents) customEvents = dbCustomEvents.map(e=>({id:e.id,title:e.title,date:e.date,endDate:e.end_date||null,tag:e.tag,color:e.color||'none',memo:e.memo,createdAt:e.created_at,sortOrder:e.sort_order??0}));
     if (dbSettings && dbSettings.length && dbSettings[0].settings) {
@@ -386,7 +386,7 @@ async function saveRoomsToSupabase() {
 async function saveMessagesToSupabase() {
   if(!messages.length) return;
   try {
-    await sbFetch('messages', 'POST', messages.map(m=>({id:m.id,room_name:m.roomName,tag:m.tag,sender:m.sender,summary:m.summary,content:m.content,message_date:m.messageDate,event_date:m.eventDate||null,created_at:m.createdAt,is_todo:m.isTodo})), '');
+    await sbFetch('messages', 'POST', messages.map(m=>({id:m.id,room_name:m.roomName,tag:m.tag,sender:m.sender,summary:m.summary,content:m.content,message_date:m.messageDate,event_date:m.eventDate||null,created_at:m.createdAt,is_todo:m.isTodo,sort_order:m.sortOrder??0})), '');
   } catch(e) { console.error('messages 저장 실패:', e); }
 }
 
@@ -8188,11 +8188,13 @@ async function applyDayDrop(fromIdx, toIdx, dateStr) {
     else { const msg=messages.find(m=>m.id===item.id); if(msg) msg.sortOrder=i; }
   });
 
-  // Supabase 업데이트 (custom_events만)
+  // Supabase 업데이트
   const customUpdates = allItems.filter(item=>item.isCustom);
-  await Promise.all(customUpdates.map((item,_)=>
-    sbFetch('custom_events','PATCH',{sort_order:allItems.indexOf(item)},`?id=eq.${item.id}`)
-  ));
+  const msgUpdates = allItems.filter(item=>!item.isCustom);
+  await Promise.all([
+    ...customUpdates.map(item=>sbFetch('custom_events','PATCH',{sort_order:allItems.indexOf(item)},`?id=eq.${item.id}`)),
+    ...msgUpdates.map(item=>sbFetch('messages','PATCH',{sort_order:allItems.indexOf(item)},`?id=eq.${item.id}`))
+  ]);
 
   handleDayClick(dateStr);
   const el = document.getElementById('main-content');
