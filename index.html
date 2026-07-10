@@ -8275,23 +8275,29 @@ function initDayTouchDrag(dateStr) {
     _touchItems.forEach(it=>{ it.style.borderTop = (target&&it===target&&_touchItems.indexOf(it)!==_touchDragIdx)?'2px solid var(--primary)':''; });
   }, {passive:false});
 
-  list.addEventListener('touchend', async e=>{
-    if(_touchDragIdx===null||!_touchGhost) return;
-    const t = e.changedTouches[0];
-    _touchGhost.remove(); _touchGhost=null;
-    _touchItems.forEach(it=>{ it.style.borderTop=''; it.style.opacity=''; });
+  function cleanupTouch() {
+    if(_touchGhost) { _touchGhost.remove(); _touchGhost=null; }
+    if(_touchItems) _touchItems.forEach(it=>{ it.style.borderTop=''; it.style.opacity=''; });
+    _touchDragIdx=null; _touchItems=null;
+  }
 
-    _touchGhost=null;
+  list.addEventListener('touchend', async e=>{
+    if(_touchDragIdx===null) return;
+    const t = e.changedTouches[0];
+    const fromIdx = _touchDragIdx;
+    const dateStr = _touchDateStr;
+    cleanupTouch();
+
     const el = document.elementFromPoint(t.clientX, t.clientY);
     const target = el?.closest('.day-drag-item');
-    const toIdx = target ? _touchItems.indexOf(target) : null;
-    const fromIdx = _touchDragIdx;
-    _touchDragIdx=null;
+    const toIdx = target ? [...document.querySelectorAll('.day-drag-item')].indexOf(target) : null;
 
     if(toIdx!==null && toIdx!==fromIdx) {
-      await applyDayDrop(fromIdx, toIdx, _touchDateStr);
+      await applyDayDrop(fromIdx, toIdx, dateStr);
     }
   });
+
+  list.addEventListener('touchcancel', ()=>{ cleanupTouch(); });
 }
 
 function applyRoomCalLayout() {
