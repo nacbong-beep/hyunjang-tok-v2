@@ -8244,12 +8244,17 @@ function initDayTouchDrag(dateStr) {
     if(!handle) return;
     e.preventDefault();
 
+    // 혹시 이전 고스트 잔존 시 강제 정리
+    document.querySelectorAll('.__touch_ghost__').forEach(el=>el.remove());
+    _touchGhost=null;
+
     _touchDateStr = dateStr;
     _touchItems = [...list.querySelectorAll('.day-drag-item')];
     _touchDragIdx = _touchItems.indexOf(item);
 
     // 고스트 생성
     _touchGhost = item.cloneNode(true);
+    _touchGhost.className += ' __touch_ghost__';
     _touchGhost.style.cssText = `position:fixed;opacity:0.75;pointer-events:none;z-index:9999;width:${item.offsetWidth}px;box-shadow:0 4px 16px rgba(0,0,0,0.2);border-radius:8px;`;
     document.body.appendChild(_touchGhost);
     item.style.opacity = '0.3';
@@ -8276,7 +8281,8 @@ function initDayTouchDrag(dateStr) {
   }, {passive:false});
 
   function cleanupTouch() {
-    if(_touchGhost) { _touchGhost.remove(); _touchGhost=null; }
+    document.querySelectorAll('.__touch_ghost__').forEach(el=>el.remove());
+    _touchGhost=null;
     if(_touchItems) _touchItems.forEach(it=>{ it.style.borderTop=''; it.style.opacity=''; });
     _touchDragIdx=null; _touchItems=null;
   }
