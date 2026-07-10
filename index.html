@@ -921,7 +921,7 @@ function renderDashboard(el) {
 function getCalendarEvents() {
   return messages
     .filter(m=>(m.eventDate||m.messageDate)&&normalizeTag(m.tag)==='일정')
-    .map(m=>({id:m.id,date:m.eventDate||m.messageDate,title:m.summary,tag:normalizeTag(m.tag),roomName:m.roomName}))
+    .map(m=>({id:m.id,date:m.eventDate||m.messageDate,title:m.summary,tag:normalizeTag(m.tag),roomName:m.roomName,sortOrder:m.sortOrder??0}))
     .sort((a,b)=>a.date.localeCompare(b.date));
 }
 
@@ -929,7 +929,7 @@ function getScheduleEvents() {
   const today = todayKey();
   return messages
     .filter(m=>(m.eventDate||m.messageDate)&&(m.eventDate||m.messageDate)>=today&&normalizeTag(m.tag)==='일정')
-    .map(m=>({id:m.id,date:m.eventDate||m.messageDate,title:m.summary,tag:normalizeTag(m.tag),roomName:m.roomName}))
+    .map(m=>({id:m.id,date:m.eventDate||m.messageDate,title:m.summary,tag:normalizeTag(m.tag),roomName:m.roomName,sortOrder:m.sortOrder??0}))
     .sort((a,b)=>a.date.localeCompare(b.date));
 }
 
