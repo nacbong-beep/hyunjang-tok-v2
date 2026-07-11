@@ -8526,9 +8526,12 @@ function saveMsgEvent() {
 function deleteMsgEvent() {
   if(!editingMsgId) return;
   if(!confirm('이 일정을 삭제할까요?')) return;
-  messages = messages.filter(m=>m.id!==editingMsgId);
-  todos = todos.filter(t=>t.messageId!==editingMsgId);
-  save(); saveMessagesToSupabase(); saveTodosToSupabase();
+  const delId = editingMsgId;
+  messages = messages.filter(m=>m.id!==delId);
+  todos = todos.filter(t=>t.messageId!==delId);
+  save();
+  sbFetch('messages', 'DELETE', null, `?id=eq.${delId}`).catch(e=>console.error(e));
+  saveTodosToSupabase();
   closeMsgEventModal();
   showToast('🗑️ 일정이 삭제됐어요');
   const el = document.getElementById('main-content');
