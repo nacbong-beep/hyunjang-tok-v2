@@ -6459,15 +6459,15 @@ function _renderPunchView(el) {
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
         ${['전체','미조치','조치완료'].map(f=>`<div onclick="punchFilter='${f}';renderPunchView(document.getElementById('main-content'))" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid ${punchFilter===f?'var(--primary)':'var(--border2)'};background:${punchFilter===f?'var(--primary)':'var(--surface)'};color:${punchFilter===f?'#fff':'var(--muted)'}">${f}</div>`).join('')}
-        <select onchange="punchLocationFilter=this.value;renderPunchView(document.getElementById('main-content'))" style="font-size:12px;padding:5px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text)">
+        <select onchange="punchLocationFilter=this.value;renderPunchView(document.getElementById('main-content'))" style="font-size:12px;padding:5px 10px;border-radius:var(--radius);border:1.5px solid ${punchLocationFilter!=='전체'?'var(--primary)':'var(--border2)'};background:${punchLocationFilter!=='전체'?'var(--primary)22':'var(--surface)'};color:${punchLocationFilter!=='전체'?'var(--primary)':'var(--text)'};font-weight:${punchLocationFilter!=='전체'?'700':'400'}">
           <option value="전체">전체 동</option>
           ${buildings.map(l=>`<option value="${l}" ${punchLocationFilter===l?'selected':''}>${l}</option>`).join('')}
         </select>
-        <select onchange="punchCatFilter=this.value;renderPunchView(document.getElementById('main-content'))" style="font-size:12px;padding:5px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text)">
+        <select onchange="punchCatFilter=this.value;renderPunchView(document.getElementById('main-content'))" style="font-size:12px;padding:5px 10px;border-radius:var(--radius);border:1.5px solid ${punchCatFilter!=='전체'?'var(--primary)':'var(--border2)'};background:${punchCatFilter!=='전체'?'var(--primary)22':'var(--surface)'};color:${punchCatFilter!=='전체'?'var(--primary)':'var(--text)'};font-weight:${punchCatFilter!=='전체'?'700':'400'}">
           <option value="전체">전체 공종</option>
           ${getPunchCats().map(c=>`<option value="${c}" ${punchCatFilter===c?'selected':''}>${c}</option>`).join('')}
         </select>
-        ${contractors.length ? `<select onchange="punchContractorFilter=this.value;renderPunchView(document.getElementById('main-content'))" style="font-size:12px;padding:5px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--surface);color:var(--text)">
+        ${contractors.length ? `<select onchange="punchContractorFilter=this.value;renderPunchView(document.getElementById('main-content'))" style="font-size:12px;padding:5px 10px;border-radius:var(--radius);border:1.5px solid ${punchContractorFilter!=='전체'?'var(--primary)':'var(--border2)'};background:${punchContractorFilter!=='전체'?'var(--primary)22':'var(--surface)'};color:${punchContractorFilter!=='전체'?'var(--primary)':'var(--text)'};font-weight:${punchContractorFilter!=='전체'?'700':'400'}">
           <option value="전체">전체 협력사</option>
           ${contractors.map(c=>`<option value="${c}" ${punchContractorFilter===c?'selected':''}>${c}</option>`).join('')}
         </select>` : ''}
