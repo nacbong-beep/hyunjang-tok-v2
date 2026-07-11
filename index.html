@@ -6011,6 +6011,8 @@ function openPunchAddModal(editItem = null) {
   const cats = getPunchCats();
   const contractors = getPunchContractors();
   const selCat = editItem?.category || cats[cats.length-1] || '기타';
+  const catMap = appSettings.punchCatContractorMap || {};
+  const autoContractor = editItem?.contractor || catMap[selCat] || '';
   const today = todayKey();
   const imgs = editItem ? (punchImages[editItem.id] || []) : [];
 
@@ -6075,7 +6077,7 @@ function openPunchAddModal(editItem = null) {
       <div style="margin-bottom:12px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">공종</div>
         <div id="punch-cat-wrap" style="display:flex;gap:6px;flex-wrap:wrap">
-          ${cats.map(c=>`<div data-cat="${c}" class="punch-cat-btn" style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${selCat===c?'var(--primary)':'var(--border2)'};background:${selCat===c?'var(--primary)':'var(--surface)'};color:${selCat===c?'#fff':'var(--muted)'}">${c}</div>`).join('')}
+          ${cats.map(c=>`<div data-cat="${c}" class="punch-cat-btn" onclick="selectPunchCat('${c}')" style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${selCat===c?'var(--primary)':'var(--border2)'};background:${selCat===c?'var(--primary)':'var(--surface)'};color:${selCat===c?'#fff':'var(--muted)'}">${c}</div>`).join('')}
         </div>
       </div>
 
@@ -6084,7 +6086,7 @@ function openPunchAddModal(editItem = null) {
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">협력사 (선택)</div>
         <select id="punch-contractor" class="modal-input" style="width:100%">
           <option value="">협력사 선택</option>
-          ${contractors.map(c=>`<option value="${c}" ${editItem?.contractor===c?'selected':''}>${c}</option>`).join('')}
+          ${contractors.map(c=>`<option value="${c}" ${autoContractor===c?'selected':''}>${c}</option>`).join('')}
         </select>
       </div>` : ''}
 
@@ -6121,6 +6123,12 @@ function openPunchAddModal(editItem = null) {
     btn.addEventListener('click', () => {
       modal.querySelectorAll('.punch-cat-btn').forEach(b => { b.style.background='var(--surface)'; b.style.color='var(--muted)'; b.style.borderColor='var(--border2)'; });
       btn.style.background='var(--primary)'; btn.style.color='#fff'; btn.style.borderColor='var(--primary)';
+      // 공종-협력사 자동 매핑
+      const cat = btn.dataset.cat;
+      const map = appSettings.punchCatContractorMap || {};
+      const mapped = map[cat];
+      const sel = document.getElementById('punch-contractor');
+      if(sel && mapped) sel.value = mapped;
     });
   });
 
@@ -7132,9 +7140,19 @@ function deletePunchCat(cat) {
   if(!confirm(`"${cat}" 공종을 삭제할까요?`)) return;
   const cats = appSettings.punchCategories || [...PUNCH_CATS_DEFAULT];
   appSettings.punchCategories = cats.filter(c => c !== cat);
+  const map = appSettings.punchCatContractorMap || {};
+  delete map[cat];
+  appSettings.punchCatContractorMap = map;
   save(); saveSettingsToSupabase();
   renderSettingsView(document.getElementById('main-content'));
   showToast(`✅ "${cat}" 공종이 삭제됐어요.`);
+}
+
+function setPunchCatContractorMap(cat, contractor) {
+  if(!appSettings.punchCatContractorMap) appSettings.punchCatContractorMap = {};
+  if(contractor) appSettings.punchCatContractorMap[cat] = contractor;
+  else delete appSettings.punchCatContractorMap[cat];
+  save(); saveSettingsToSupabase();
 }
 
 function addPunchContractor() {
@@ -7898,10 +7916,15 @@ function renderSettingsView(el) {
             <input id="new-punch-cat" class="modal-input" placeholder="새 공종 이름" style="flex:1">
             <button class="btn-primary" onclick="addPunchCat()" style="padding:6px 12px;font-size:12px;white-space:nowrap;align-self:center">추가</button>
           </div>
-          <div id="punch-cat-list" style="display:flex;flex-wrap:wrap;gap:6px">
+          <div id="punch-cat-list" style="display:flex;flex-direction:column;gap:6px">
             ${(appSettings.punchCategories || PUNCH_CATS_DEFAULT).map(cat => `
-              <div style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;background:var(--surface);border:1px solid var(--border2);border-radius:20px;font-size:12px;color:var(--text)">
-                <span>${cat}</span>
+              <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface);border:1px solid var(--border2);border-radius:10px;font-size:12px;color:var(--text)">
+                <span style="min-width:48px;font-weight:600">${cat}</span>
+                <span style="color:var(--muted);font-size:11px">→</span>
+                <select onchange="setPunchCatContractorMap('${cat}',this.value)" style="flex:1;font-size:12px;padding:3px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--card);color:var(--text)">
+                  <option value="">협력사 미지정</option>
+                  ${(appSettings.punchContractors||[]).map(c=>`<option value="${c}" ${(appSettings.punchCatContractorMap||{})[cat]===c?'selected':''}>${c}</option>`).join('')}
+                </select>
                 <button onclick="deletePunchCat('${cat}')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;padding:0 2px;line-height:1">✕</button>
               </div>
             `).join('')}
