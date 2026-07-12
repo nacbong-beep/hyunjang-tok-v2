@@ -3086,6 +3086,17 @@ function toggleWeeklySearch() {
   }
 }
 
+function highlightKeywords(val, keywords) {
+  let h = val;
+  keywords.forEach(kw => {
+    h = h.replace(
+      new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),
+      match => '<mark style="background:#fef08a;color:#1a2332;border-radius:2px;padding:0 2px">'+match+'</mark>'
+    );
+  });
+  return h;
+}
+
 function searchWeeklyAll(q) {
   const el = document.getElementById('weekly-search-results');
   if(!q.trim()) { el.innerHTML = ''; return; }
@@ -3130,16 +3141,7 @@ function searchWeeklyAll(q) {
   const rowTypes = ['전체',...new Set(results.map(r=>r.row))];
   const filtered = activeFilter==='전체' ? results : results.filter(r=>r.row===activeFilter);
 
-  function highlight(val) {
-    let h = val;
-    keywords.forEach(kw => {
-      h = h.replace(
-        new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),
-        match => `<mark style="background:#fef08a;color:#1a2332;border-radius:2px;padding:0 2px">${match}</mark>`
-      );
-    });
-    return h;
-  }
+  function highlight(val) { return highlightKeywords(val, keywords); }
 
   el.innerHTML = `
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap">
