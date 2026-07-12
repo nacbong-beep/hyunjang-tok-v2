@@ -2223,6 +2223,12 @@ function renderInputView(el) {
   document.getElementById('input-text').addEventListener('input', function() {
     document.getElementById('input-count').textContent = `${this.value.length}자 · 미리보기 ${previewItems.length}건`;
   });
+
+  // 페이지 복귀 시 미저장 분류 결과 복원
+  if(previewItems.length) {
+    renderPreviewList();
+    document.getElementById('input-count').textContent = `미리보기 ${previewItems.length}건 (미저장)`;
+  }
 }
 
 function updateExample() {
