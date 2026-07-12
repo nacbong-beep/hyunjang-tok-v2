@@ -8676,9 +8676,12 @@ async function refreshToken() {
 async function autoRefreshToken() {
   const ok = await refreshToken();
   if(ok) {
-    // 갱신 성공 → 45분 후 다시 갱신
     setTimeout(autoRefreshToken, 45 * 60 * 1000);
     console.log('✅ 토큰 자동갱신 완료');
+  } else {
+    // 갱신 실패 시 5분 후 재시도
+    console.warn('⚠️ 토큰 갱신 실패, 5분 후 재시도');
+    setTimeout(autoRefreshToken, 5 * 60 * 1000);
   }
 }
 
