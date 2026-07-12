@@ -400,9 +400,10 @@ async function saveTodosToSupabase() {
 function setSyncStatus(status) {
   const el = document.getElementById('header-sub');
   if(!el) return;
+  const aiLabel = '  |  🤖 ' + (aiEngine === 'gemini' ? 'Gemini' : 'Claude');
   if(status === 'saving') { el.textContent = '🔄 저장 중...'; el.style.color = 'var(--muted)'; }
-  else if(status === 'saved') { el.textContent = '✅ 클라우드 저장됨'; el.style.color = '#10b981'; setTimeout(()=>{ el.textContent = '☁️ Supabase 클라우드 저장 모드'; el.style.color = 'var(--soft)'; }, 2000); }
-  else if(status === 'error') { el.textContent = '⚠️ 저장 실패'; el.style.color = '#ef4444'; setTimeout(()=>{ el.textContent = '☁️ Supabase 클라우드 저장 모드'; el.style.color = 'var(--soft)'; }, 3000); }
+  else if(status === 'saved') { el.textContent = '✅ 클라우드 저장됨'; el.style.color = '#10b981'; setTimeout(()=>{ el.textContent = '☁️ Supabase 클라우드 저장 모드' + aiLabel; el.style.color = 'var(--soft)'; }, 2000); }
+  else if(status === 'error') { el.textContent = '⚠️ 저장 실패'; el.style.color = '#ef4444'; setTimeout(()=>{ el.textContent = '☁️ Supabase 클라우드 저장 모드' + aiLabel; el.style.color = 'var(--soft)'; }, 3000); }
 }
 
 async function saveCustomEventsToSupabase() {
@@ -8759,7 +8760,7 @@ function initApp() {
   document.getElementById('header-sub').textContent = '☁️ Supabase 연결 중...';
   loadFromSupabase().then(ok => {
     if (ok) {
-      document.getElementById('header-sub').textContent = '☁️ Supabase 클라우드 저장 모드';
+      document.getElementById('header-sub').textContent = '☁️ Supabase 클라우드 저장 모드  |  🤖 ' + (aiEngine === 'gemini' ? 'Gemini' : 'Claude');
     } else {
       document.getElementById('header-sub').textContent = '⚠️ 로컬 저장 모드 (Supabase 연결 실패)';
     }
