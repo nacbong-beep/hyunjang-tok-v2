@@ -3082,6 +3082,7 @@ function toggleWeeklySearch() {
     setTimeout(() => document.getElementById('weekly-search-input').focus(), 50);
     document.getElementById('weekly-search-results').innerHTML = '';
     document.getElementById('weekly-search-input').value = '';
+    window._weeklySearchFilter = '전체';
   }
 }
 
@@ -3089,7 +3090,6 @@ function searchWeeklyAll(q) {
   const el = document.getElementById('weekly-search-results');
   if(!q.trim()) { el.innerHTML = ''; return; }
 
-  // 스페이스로 분리해서 AND 검색 (예: "302동 단열" → 302동 AND 단열 모두 포함)
   const keywords = q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   const results = [];
 
@@ -3115,23 +3115,57 @@ function searchWeeklyAll(q) {
     return;
   }
 
+  // 구분별 색상 정의
+  const ROW_STYLE = {
+    '작업사항': {bg:'#dbeafe',color:'#1d4ed8'},
+    '검측사항': {bg:'#dcfce7',color:'#15803d'},
+    '확인사항': {bg:'#fef9c3',color:'#a16207'},
+    '서류사항': {bg:'#fce7f3',color:'#be185d'},
+    '기타':     {bg:'#f3f4f6',color:'#374151'},
+  };
+
+  // 현재 필터 상태 (전역 변수 방식으로 관리)
+  if(!window._weeklySearchFilter) window._weeklySearchFilter = '전체';
+  const activeFilter = window._weeklySearchFilter;
+  const rowTypes = ['전체',...new Set(results.map(r=>r.row))];
+  const filtered = activeFilter==='전체' ? results : results.filter(r=>r.row===activeFilter);
+
+  function highlight(val) {
+    let h = val;
+    keywords.forEach(kw => {
+      h = h.replace(
+        new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),
+        match => `<mark style="background:#fef08a;color:#1a2332;border-radius:2px;padding:0 2px">${match}</mark>`
+      );
+    });
+    return h;
+  }
+
   el.innerHTML = `
-    <div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:8px">${results.length}건 검색됨</div>
-    ${results.map(r => {
-      let highlighted = r.val;
-      keywords.forEach(kw => {
-        highlighted = highlighted.replace(
-          new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),
-          match => `<mark style="background:#fef08a;color:#1a2332;border-radius:2px;padding:0 2px">${match}</mark>`
-        );
-      });
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;flex-wrap:wrap">
+      <span style="font-size:12px;font-weight:700;color:var(--muted)">${results.length}건 검색됨</span>
+      <div style="display:flex;gap:4px;flex-wrap:wrap">
+        ${rowTypes.map(type => {
+          const s = type==='전체' ? {bg:'#1a2332',color:'#fff'} : (ROW_STYLE[type]||{bg:'#f3f4f6',color:'#374151'});
+          const isActive = activeFilter===type;
+          return `<span onclick="window._weeklySearchFilter='${type}';searchWeeklyAll(document.getElementById('weekly-search-input').value)"
+            style="cursor:pointer;font-size:11px;font-weight:700;padding:3px 10px;border-radius:12px;
+            background:${isActive?s.bg:'var(--surface)'};color:${isActive?s.color:'var(--muted)'};
+            border:1.5px solid ${isActive?s.bg:'var(--border2)'}">
+            ${type}${type!=='전체'?` (${results.filter(r=>r.row===type).length})`:''}
+          </span>`;
+        }).join('')}
+      </div>
+    </div>
+    ${filtered.map(r => {
+      const s = ROW_STYLE[r.row]||{bg:'#f3f4f6',color:'#374151'};
       return `<div class="item" style="cursor:pointer;margin-bottom:8px" onclick="goToWeek('${r.wk}')">
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-          <span class="badge b-blue">${r.row}</span>
+          <span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:10px;background:${s.bg};color:${s.color};white-space:nowrap">${r.row}</span>
           <span style="font-size:12px;font-weight:700;color:var(--primary)">${r.dateLabel}</span>
           <span style="font-size:11px;color:var(--soft)">${r.weekLabel}</span>
         </div>
-        <div style="font-size:13px;line-height:1.6;color:var(--text)">${highlighted}</div>
+        <div style="font-size:13px;line-height:1.6;color:var(--text)">${highlight(r.val)}</div>
       </div>`;
     }).join('')}`;
 }
