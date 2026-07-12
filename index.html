@@ -6293,10 +6293,10 @@ async function extractLocationFromImage(file) {
     const jsonMatch = stripped.match(/\{[\s\S]*?\}/);
     if(!jsonMatch) return;
     const loc = JSON.parse(jsonMatch[0]);
-    if(loc.building) { const el = document.getElementById('punch-building'); if(el && !el.value) el.value = loc.building; }
-    if(loc.unit) { const el = document.getElementById('punch-unit'); if(el && !el.value) el.value = loc.unit; }
-    if(loc.space) { const el = document.getElementById('punch-space'); if(el && !el.value) el.value = loc.space; }
-    if(loc.description) { const el = document.getElementById('punch-desc'); if(el && !el.value) el.value = loc.description; }
+    if(loc.building) { const el = document.getElementById('punch-building'); if(el) el.value = loc.building; }
+    if(loc.unit) { const el = document.getElementById('punch-unit'); if(el) el.value = loc.unit; }
+    if(loc.space) { const el = document.getElementById('punch-space'); if(el) el.value = loc.space; }
+    if(loc.description) { const el = document.getElementById('punch-desc'); if(el) el.value = loc.description; }
     if(loc.building || loc.unit || loc.description) showToast('📍 위치/내용 자동 입력됐어요!');
   } catch(e) { console.warn('위치 인식 실패:', e); }
 }
