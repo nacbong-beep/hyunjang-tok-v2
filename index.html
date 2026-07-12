@@ -6114,7 +6114,7 @@ function openPunchAddModal(editItem = null) {
       <div style="margin-bottom:12px">
         <div style="font-size:12px;color:var(--muted);margin-bottom:5px">공종</div>
         <div id="punch-cat-wrap" style="display:flex;gap:6px;flex-wrap:wrap">
-          ${cats.map(c=>`<div data-cat="${c}" class="punch-cat-btn" onclick="selectPunchCat('${c}')" style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${selCat===c?'var(--primary)':'var(--border2)'};background:${selCat===c?'var(--primary)':'var(--surface)'};color:${selCat===c?'#fff':'var(--muted)'}">${c}</div>`).join('')}
+          ${cats.map(c=>`<div data-cat="${c}" class="punch-cat-btn" style="padding:5px 12px;border-radius:20px;font-size:12px;cursor:pointer;border:1px solid ${selCat===c?'var(--primary)':'var(--border2)'};background:${selCat===c?'var(--primary)':'var(--surface)'};color:${selCat===c?'#fff':'var(--muted)'}">${c}</div>`).join('')}
         </div>
       </div>
 
