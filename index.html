@@ -3087,14 +3087,9 @@ function toggleWeeklySearch() {
 }
 
 function highlightKeywords(val, keywords) {
-  let h = val;
-  keywords.forEach(kw => {
-    h = h.replace(
-      new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'gi'),
-      match => '<mark style="background:#fef08a;color:#1a2332;border-radius:2px;padding:0 2px">'+match+'</mark>'
-    );
-  });
-  return h;
+  // 텍스트를 토큰으로 분리해서 매칭 - mark 태그 내부 재치환 방지
+  const combined = new RegExp('(' + keywords.map(kw => kw.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|') + ')', 'gi');
+  return val.replace(combined, '<mark style="background:#fef08a;color:#1a2332;border-radius:2px;padding:0 2px">$1</mark>');
 }
 
 function searchWeeklyAll(q) {
