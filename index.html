@@ -7422,7 +7422,7 @@ async function deleteGalleryPhoto(photoId, folderId) {
 }
 
 async function createGalleryFolder(name) {
-  const id = uid();
+  let id = uid();
   const res = await sbFetch('gallery_folders', 'POST', [{ name, sort_order: galleryFolders.length }]);
   if(res && res[0]) id = res[0].id;
   await loadGalleryFolders();
