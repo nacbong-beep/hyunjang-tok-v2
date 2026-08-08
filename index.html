@@ -3807,7 +3807,7 @@ function openLibCatMemoModal(storageType, catName) {
         <button onclick="document.getElementById('lib-memo-textarea').value=''" class="btn-ghost" style="font-size:12px;padding:8px 12px">🗑 초기화</button>
         <div style="display:flex;gap:8px">
           <button onclick="document.getElementById('lib-memo-modal').remove()" class="btn-ghost" style="font-size:13px;padding:8px 16px">취소</button>
-          <button onclick="saveLibCatMemoFromModal('${storageType}','${catName}')" class="btn-primary" style="font-size:13px;padding:8px 16px">저장</button>
+          <button id="lib-memo-save-btn" onclick="saveLibCatMemoFromModal('${storageType}','${catName}')" class="btn-primary" style="font-size:13px;padding:8px 16px">저장</button>
         </div>
       </div>
     </div>`;
@@ -3820,7 +3820,7 @@ async function saveLibCatMemoFromModal(storageType, catName) {
   const text = document.getElementById('lib-memo-textarea')?.value || '';
   await saveLibCatMemo(storageType, catName, text);
   showToast('✅ 메모가 저장됐어요!');
-  const saveBtn = document.querySelector('#lib-memo-modal .btn-primary');
+  const saveBtn = document.getElementById('lib-memo-save-btn');
   if(saveBtn) {
     saveBtn.textContent = '닫기';
     saveBtn.onclick = () => { document.getElementById('lib-memo-modal')?.remove(); renderLibraryView(document.getElementById('main-content'), storageType); };
