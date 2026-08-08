@@ -3786,7 +3786,7 @@ async function saveLibCatMemo(storageType, catName, memoText) {
   libCatMemos[storageType][catName] = memoText;
   appSettings['libCatMemos'] = libCatMemos;
   localStorage.setItem('hj3_settings', JSON.stringify(appSettings));
-  await saveAppSettings();
+  await saveSettingsToSupabase();
 }
 
 function loadLibCatMemos() {
