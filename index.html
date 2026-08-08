@@ -3819,9 +3819,12 @@ function openLibCatMemoModal(storageType, catName) {
 async function saveLibCatMemoFromModal(storageType, catName) {
   const text = document.getElementById('lib-memo-textarea')?.value || '';
   await saveLibCatMemo(storageType, catName, text);
-  document.getElementById('lib-memo-modal')?.remove();
   showToast('✅ 메모가 저장됐어요!');
-  renderLibraryView(document.getElementById('main-content'), storageType);
+  const saveBtn = document.querySelector('#lib-memo-modal .btn-primary');
+  if(saveBtn) {
+    saveBtn.textContent = '닫기';
+    saveBtn.onclick = () => { document.getElementById('lib-memo-modal')?.remove(); renderLibraryView(document.getElementById('main-content'), storageType); };
+  }
 }
 
 function renderLibCatMemoTab(storageType) {
