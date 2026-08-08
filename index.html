@@ -4718,23 +4718,20 @@ async function renderLibraryView(el, storageType='library') {
         </div>
       </div>
 
-      <!-- 오른쪽: 자료 목록 / 시공 메모 탭 -->
+      <!-- 오른쪽: 자료 목록 -->
       <div>
-        <!-- 탭 (시공관리만 메모 탭 표시) -->
-        ${storageType === 'construction' ? `
-        <div style="display:flex;border-bottom:1px solid var(--border2);margin-bottom:12px">
-          <button id="lib-tab-docs" onclick="libActiveTab['${storageType}']='docs';document.getElementById('lib-tab-docs').style.cssText='padding:8px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid var(--primary);color:var(--primary);margin-bottom:-1px';document.getElementById('lib-tab-memo').style.cssText='padding:8px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);margin-bottom:-1px';document.getElementById('lib-content-docs').style.display='';document.getElementById('lib-content-memo').style.display='none'"
-            style="padding:8px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid ${(libActiveTab[storageType]||'docs')==='docs'?'var(--primary)':'transparent'};color:${(libActiveTab[storageType]||'docs')==='docs'?'var(--primary)':'var(--muted)'};margin-bottom:-1px">
-            자료 목록
-          </button>
-          <button id="lib-tab-memo" onclick="libActiveTab['${storageType}']='memo';document.getElementById('lib-tab-memo').style.cssText='padding:8px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid var(--primary);color:var(--primary);margin-bottom:-1px';document.getElementById('lib-tab-docs').style.cssText='padding:8px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);margin-bottom:-1px';document.getElementById('lib-content-docs').style.display='none';document.getElementById('lib-content-memo').style.display=''"
-            style="padding:8px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;border-bottom:2px solid ${(libActiveTab[storageType]||'docs')==='memo'?'var(--primary)':'transparent'};color:${(libActiveTab[storageType]||'docs')==='memo'?'var(--primary)':'var(--muted)'};margin-bottom:-1px">
-            📝 시공 메모
-          </button>
-        </div>` : ''}
+        <!-- 시공관리: 선택된 공종 메모 패널 -->
+        ${storageType === 'construction' && curCat ? (() => {
+          const memo = (libCatMemos[storageType] || {})[curCat] || '';
+          return `<div class="panel" style="padding:14px 16px;margin-bottom:12px">
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div style="font-size:13px;font-weight:700;color:var(--accent)">📝 ${curCat} 메모</div>
+              <button onclick="openLibCatMemoModal('${storageType}','${curCat}')" class="btn-ghost" style="font-size:12px;padding:4px 10px">${memo?'✏️ 편집':'+ 메모 추가'}</button>
+            </div>
+            ${memo ? `<div style="font-size:13px;color:var(--text);line-height:1.7;white-space:pre-wrap;margin-top:10px">${memo}</div>` : ''}
+          </div>`;
+        })() : ''}
 
-        <!-- 자료 목록 영역 -->
-        <div id="lib-content-docs" style="display:${storageType==='construction'&&(libActiveTab[storageType]||'docs')==='memo'?'none':''}">
         <!-- 검색창 -->
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;background:var(--card);border:1px solid var(--border2);border-radius:var(--radius);padding:10px 14px">
           <span style="font-size:15px;color:var(--soft)">🔍</span>
@@ -4783,13 +4780,6 @@ async function renderLibraryView(el, storageType='library') {
                 </div>`).join('')}
             </div>`
         }
-        </div><!-- /lib-content-docs -->
-
-        ${storageType === 'construction' ? `
-        <div id="lib-content-memo" style="display:${(libActiveTab[storageType]||'docs')==='memo'?'':'none'}">
-          ${renderLibCatMemoTab(storageType)}
-        </div>` : ''}
-
       </div>
     </div>
 
