@@ -7305,16 +7305,23 @@ function deletePunchContractor(name) {
 let galleryFolders = [];
 let galleryPhotos = {};
 let currentGalleryFolder = null;
+let gallerySelectMode = false;      // 폴더 상세: 사진 다중 선택 모드
+const gallerySelected = new Set();  // 선택된 사진 id
 
 async function loadGalleryFolders() {
   try {
     const rows = await sbFetch('gallery_folders', 'GET', null, '?order=sort_order');
     galleryFolders = rows || [];
-    // 각 폴더 사진 수만 카운트 (기존 로드된 사진 덮어쓰지 않음)
-    await Promise.all(galleryFolders.map(async f => {
-      const photos = await sbFetch('gallery_photos', 'GET', null, `?folder_id=eq.${f.id}&select=id`);
-      f._count = (photos||[]).length;
-    }));
+    // 폴더별 사진 수: folder_id만 페이지 단위(1000행)로 읽어 한 번에 집계 (폴더 수만큼 쿼리하지 않음)
+    const counts = {};
+    const PAGE = 1000;
+    for(let offset = 0; ; offset += PAGE) {
+      const part = await sbFetch('gallery_photos', 'GET', null, `?select=folder_id&order=id&limit=${PAGE}&offset=${offset}`);
+      if(!part || !part.length) break;
+      part.forEach(p => { counts[p.folder_id] = (counts[p.folder_id] || 0) + 1; });
+      if(part.length < PAGE) break;
+    }
+    galleryFolders.forEach(f => { f._count = counts[f.id] || 0; });
   } catch(e) { console.error(e); }
 }
 
@@ -7349,6 +7356,8 @@ async function uploadGalleryPhoto(folderId, file, title='') {
 
   await sbFetch('gallery_photos', 'POST', [{ folder_id: folderId, file_path: filePath, thumb_path: thumbBlob ? thumbPath : null, memo: '', title: title||'' }]);
   await loadGalleryPhotos(folderId);
+  const folderRef = galleryFolders.find(f => f.id === folderId);
+  if(folderRef) folderRef._count = (galleryPhotos[folderId] || []).length;
   renderGalleryView(document.getElementById('main-content'));
 }
 
@@ -7492,6 +7501,10 @@ async function confirmGalleryPhotoEdit(photoId, folderId) {
     if(photo && galleryPhotos[newFolderId]) {
       galleryPhotos[newFolderId] = [{...photo, title, memo, folder_id: newFolderId}, ...(galleryPhotos[newFolderId]||[])];
     }
+    // 폴더 목록의 장수 표시도 갱신
+    const fromF = galleryFolders.find(f => f.id === folderId), toF = galleryFolders.find(f => f.id === newFolderId);
+    if(fromF) fromF._count = Math.max(0, (fromF._count || 0) - 1);
+    if(toF) toF._count = (toF._count || 0) + 1;
     showToast('✅ 다른 폴더로 이동됐어요!');
     _renderGalleryFolderDetail(document.getElementById('main-content'), folderId);
   } else {
@@ -7501,10 +7514,32 @@ async function confirmGalleryPhotoEdit(photoId, folderId) {
   }
 }
 
+// Storage 파일 일괄 삭제 (실패해도 UI 흐름은 막지 않음)
+async function deleteGalleryStorageFiles(paths) {
+  const list = [...new Set((paths||[]).filter(Boolean))];
+  if(!list.length) return;
+  try {
+    const token = localStorage.getItem('hj_token') || SUPABASE_KEY;
+    const res = await fetch(`${SUPABASE_URL}/storage/v1/object/library`, {
+      method: 'DELETE',
+      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prefixes: list })
+    });
+    if(!res.ok) console.warn('갤러리 Storage 삭제 실패:', await res.text());
+    // 삭제된 파일의 썸네일 URL 캐시도 제거
+    list.forEach(p => localStorage.removeItem('hj_thumb_cache_v1_' + p));
+  } catch(e) { console.warn('갤러리 Storage 삭제 오류:', e); }
+}
+
 async function deleteGalleryPhoto(photoId, folderId) {
   if(!confirm('이 사진을 삭제할까요?')) return;
-  await sbFetch('gallery_photos', 'DELETE', null, `?id=eq.${photoId}`);
+  const photo = (galleryPhotos[folderId] || []).find(p => p.id === photoId);
+  const res = await sbFetch('gallery_photos', 'DELETE', null, `?id=eq.${photoId}`);
+  if(!res) { showToast('삭제에 실패했어요. 다시 시도해주세요.'); return; }
+  if(photo) await deleteGalleryStorageFiles([photo.file_path, photo.thumb_path]);
   galleryPhotos[folderId] = (galleryPhotos[folderId] || []).filter(p => p.id !== photoId);
+  const f = galleryFolders.find(f => f.id === folderId);
+  if(f && typeof f._count === 'number') f._count = Math.max(0, f._count - 1);
   renderGalleryView(document.getElementById('main-content'));
 }
 
@@ -7518,7 +7553,13 @@ async function createGalleryFolder(name) {
 
 async function deleteGalleryFolder(folderId) {
   if(!confirm('폴더와 모든 사진을 삭제할까요?')) return;
-  await sbFetch('gallery_folders', 'DELETE', null, `?id=eq.${folderId}`);
+  // 폴더 안 사진 경로를 먼저 확보 (조회 실패 시 파일이 고아가 되므로 중단)
+  const photoRows = await sbFetch('gallery_photos', 'GET', null, `?folder_id=eq.${folderId}&select=file_path,thumb_path`);
+  if(photoRows === null) { showToast('사진 목록을 불러오지 못해 삭제를 중단했어요.'); return; }
+  await sbFetch('gallery_photos', 'DELETE', null, `?folder_id=eq.${folderId}`);
+  const delRes = await sbFetch('gallery_folders', 'DELETE', null, `?id=eq.${folderId}`);
+  if(!delRes) { showToast('폴더 삭제에 실패했어요.'); return; }
+  await deleteGalleryStorageFiles(photoRows.flatMap(p => [p.file_path, p.thumb_path]));
   galleryFolders = galleryFolders.filter(f => f.id !== folderId);
   delete galleryPhotos[folderId];
   currentGalleryFolder = null;
@@ -7796,6 +7837,7 @@ function initGalleryFolderDrag() {
 
 async function openGalleryFolder(folderId) {
   currentGalleryFolder = folderId;
+  gallerySelectMode = false; gallerySelected.clear();
   // 전체 컬럼으로 로드 (사진 수 체크 시 id만 가져온 경우 재로드)
   await loadGalleryPhotos(folderId);
   _renderGalleryFolderDetail(document.getElementById('main-content'), folderId);
@@ -7807,20 +7849,33 @@ function _renderGalleryFolderDetail(el, folderId) {
   el.innerHTML = `
     <div style="max-width:900px;margin:0 auto;padding:0 0 40px">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-        <button onclick="currentGalleryFolder=null;renderGalleryView(document.getElementById('main-content'))" style="background:none;border:1px solid var(--border2);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;color:var(--text)">← 목록</button>
-        <span style="font-size:15px;font-weight:700;color:var(--text)">🗂️ ${folder?.name||''}</span>
+        <button onclick="currentGalleryFolder=null;gallerySelectMode=false;gallerySelected.clear();renderGalleryView(document.getElementById('main-content'))" style="background:none;border:1px solid var(--border2);border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;color:var(--text)">← 목록</button>
+        <span style="font-size:15px;font-weight:700;color:var(--text);flex:1">🗂️ ${folder?.name||''}</span>
+        <input type="file" id="gallery-detail-file-input" accept="image/*" multiple style="display:none" onchange="handleGalleryFileSelect(event,'${folderId}')">
+        <button onclick="document.getElementById('gallery-detail-file-input').click()" style="background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:7px 12px;font-size:12px;cursor:pointer;color:var(--text);white-space:nowrap">📷 사진 추가</button>
+        <button onclick="pasteGalleryPhoto('${folderId}')" style="background:var(--surface);border:1px solid var(--border2);border-radius:9px;padding:7px 12px;font-size:12px;cursor:pointer;color:var(--text);white-space:nowrap">📋 붙여넣기</button>
+        ${photos.length ? `<button onclick="toggleGallerySelectMode()" style="background:${gallerySelectMode?'var(--primary)':'var(--surface)'};color:${gallerySelectMode?'#fff':'var(--text)'};border:1px solid ${gallerySelectMode?'var(--primary)':'var(--border2)'};border-radius:9px;padding:7px 12px;font-size:12px;cursor:pointer;white-space:nowrap">${gallerySelectMode?'✕ 선택 취소':'☑️ 선택'}</button>` : ''}
       </div>
+
+      ${gallerySelectMode ? `
+      <div style="position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:6px;flex-wrap:wrap;background:var(--card);border:1px solid var(--primary);border-radius:10px;padding:8px 10px;margin-bottom:10px">
+        <span id="gallery-sel-count" style="font-size:13px;font-weight:700;color:var(--text);margin-right:auto">${gallerySelected.size}장 선택됨</span>
+        <button onclick="galleryToggleSelectAll()" class="btn-ghost" style="font-size:12px;padding:6px 10px">전체 선택/해제</button>
+        <button onclick="openGalleryBulkMove()" class="btn-ghost" style="font-size:12px;padding:6px 10px">📁 이동</button>
+        <button onclick="galleryBulkDelete()" style="background:#ef4444;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;padding:6px 10px;cursor:pointer">🗑️ 삭제</button>
+      </div>` : ''}
 
       ${photos.length === 0 ? `<div style="text-align:center;color:var(--muted);padding:60px 0;font-size:14px">사진이 없어요.</div>` : `
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">
         ${photos.map(p => `
-          <div style="position:relative;border-radius:10px;overflow:hidden;background:var(--card);border:1px solid var(--border)">
-            <div style="aspect-ratio:1;cursor:pointer" onclick="openGalleryPhotoViewer('${p.file_path}')">
+          <div class="gallery-photo-card" data-photo-id="${p.id}" style="position:relative;border-radius:10px;overflow:hidden;background:var(--card);border:2px solid ${gallerySelected.has(p.id)?'var(--primary)':'var(--border)'}">
+            <div style="aspect-ratio:1;cursor:pointer" onclick="galleryPhotoClick('${p.id}','${p.file_path}')">
               <img data-path="${p.thumb_path||p.file_path}" class="lib-thumb" style="width:100%;height:100%;object-fit:cover">
             </div>
+            ${gallerySelectMode ? `<div class="gallery-sel-mark" style="position:absolute;top:6px;left:6px;width:22px;height:22px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.3);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#fff;pointer-events:none;background:${gallerySelected.has(p.id)?'var(--primary)':'rgba(0,0,0,.35)'}">${gallerySelected.has(p.id)?'✓':''}</div>` : ''}
             <div style="padding:4px 8px 4px 8px;display:flex;align-items:center;gap:4px;min-height:26px">
               <span style="flex:1;font-size:11px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.title||''}</span>
-              <button onclick="event.stopPropagation();openGalleryPhotoMenu('${p.id}','${folderId}',this)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;padding:0 2px;line-height:1;flex-shrink:0">⋮</button>
+              ${gallerySelectMode ? '' : `<button onclick="event.stopPropagation();openGalleryPhotoMenu('${p.id}','${folderId}',this)" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;padding:0 2px;line-height:1;flex-shrink:0">⋮</button>`}
             </div>
           </div>
         `).join('')}
@@ -7855,6 +7910,120 @@ function _renderGalleryFolderDetail(el, folderId) {
       observer.observe(img);
     });
   }, 50);
+}
+
+// ===== 갤러리 일괄 선택 =====
+function toggleGallerySelectMode() {
+  gallerySelectMode = !gallerySelectMode;
+  gallerySelected.clear();
+  _renderGalleryFolderDetail(document.getElementById('main-content'), currentGalleryFolder);
+}
+
+function galleryPhotoClick(photoId, filePath) {
+  if(!gallerySelectMode) { openGalleryPhotoViewer(filePath); return; }
+  if(gallerySelected.has(photoId)) gallerySelected.delete(photoId); else gallerySelected.add(photoId);
+  updateGallerySelectionUI();
+}
+
+function galleryToggleSelectAll() {
+  const photos = galleryPhotos[currentGalleryFolder] || [];
+  if(gallerySelected.size === photos.length) gallerySelected.clear();
+  else photos.forEach(p => gallerySelected.add(p.id));
+  updateGallerySelectionUI();
+}
+
+// 전체 재렌더 없이 체크 표시만 갱신 (썸네일 깜빡임 방지)
+function updateGallerySelectionUI() {
+  document.querySelectorAll('.gallery-photo-card').forEach(card => {
+    const sel = gallerySelected.has(card.dataset.photoId);
+    card.style.borderColor = sel ? 'var(--primary)' : 'var(--border)';
+    const mark = card.querySelector('.gallery-sel-mark');
+    if(mark) { mark.textContent = sel ? '✓' : ''; mark.style.background = sel ? 'var(--primary)' : 'rgba(0,0,0,.35)'; }
+  });
+  const cnt = document.getElementById('gallery-sel-count');
+  if(cnt) cnt.textContent = `${gallerySelected.size}장 선택됨`;
+}
+
+// id 목록을 50개씩 끊어서 PostgREST in.() 필터로 처리 (URL 길이 제한 방지). 성공한 id 배열 반환
+async function _galleryBatchByIds(ids, method, body) {
+  const done = [];
+  for(let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const res = await sbFetch('gallery_photos', method, body, `?id=in.(${chunk.map(id => `"${id}"`).join(',')})`);
+    if(!res) break;
+    done.push(...chunk);
+  }
+  return done;
+}
+
+function openGalleryBulkMove() {
+  if(!gallerySelected.size) { showToast('이동할 사진을 먼저 선택해주세요.'); return; }
+  document.getElementById('gallery-bulk-move-modal')?.remove();
+  const targets = galleryFolders.filter(f => f.id !== currentGalleryFolder);
+  if(!targets.length) { showToast('이동할 다른 폴더가 없어요.'); return; }
+  const modal = document.createElement('div');
+  modal.id = 'gallery-bulk-move-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:8000;display:flex;align-items:center;justify-content:center';
+  modal.innerHTML = `
+    <div style="background:var(--card);border-radius:16px;padding:24px;width:90%;max-width:360px">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">📁 폴더 이동</div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:14px">선택한 ${gallerySelected.size}장을 옮길 폴더를 고르세요.</div>
+      <input class="modal-input" placeholder="폴더 검색..." style="margin-bottom:6px;width:100%"
+        oninput="const q=this.value.toLowerCase();[...document.getElementById('gbm-folder').options].forEach(o=>o.style.display=o.text.toLowerCase().includes(q)?'':'none')">
+      <select id="gbm-folder" class="modal-input" size="6" style="height:auto;width:100%;margin-bottom:16px">
+        ${targets.map((f,i) => `<option value="${f.id}" ${i===0?'selected':''}>${f.name}</option>`).join('')}
+      </select>
+      <div style="display:flex;gap:8px">
+        <button onclick="document.getElementById('gallery-bulk-move-modal').remove()" class="btn-ghost" style="flex:1">취소</button>
+        <button onclick="confirmGalleryBulkMove()" class="btn-primary" style="flex:1">이동</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e => { if(e.target === modal) modal.remove(); });
+}
+
+async function confirmGalleryBulkMove() {
+  const targetId = document.getElementById('gbm-folder')?.value;
+  const fromId = currentGalleryFolder;
+  if(!targetId || targetId === fromId) { showToast('이동할 폴더를 선택해주세요.'); return; }
+  document.getElementById('gallery-bulk-move-modal')?.remove();
+  const ids = [...gallerySelected];
+  showToast(`⏳ ${ids.length}장 이동 중...`);
+  const moved = await _galleryBatchByIds(ids, 'PATCH', { folder_id: targetId });
+  if(moved.length) {
+    const movedSet = new Set(moved);
+    const movedPhotos = (galleryPhotos[fromId] || []).filter(p => movedSet.has(p.id));
+    galleryPhotos[fromId] = (galleryPhotos[fromId] || []).filter(p => !movedSet.has(p.id));
+    if(galleryPhotos[targetId]) galleryPhotos[targetId] = [...movedPhotos.map(p => ({...p, folder_id: targetId})), ...galleryPhotos[targetId]];
+    const from = galleryFolders.find(f => f.id === fromId), to = galleryFolders.find(f => f.id === targetId);
+    if(from) from._count = (galleryPhotos[fromId] || []).length;
+    if(to) to._count = (to._count || 0) + moved.length;
+  }
+  gallerySelected.clear();
+  gallerySelectMode = false;
+  _renderGalleryFolderDetail(document.getElementById('main-content'), fromId);
+  showToast(moved.length === ids.length ? `✅ ${moved.length}장을 이동했어요!` : `⚠️ ${moved.length}/${ids.length}장만 이동됐어요. 다시 시도해주세요.`);
+}
+
+async function galleryBulkDelete() {
+  const ids = [...gallerySelected];
+  if(!ids.length) { showToast('삭제할 사진을 먼저 선택해주세요.'); return; }
+  if(!confirm(`선택한 ${ids.length}장을 삭제할까요?\n삭제하면 되돌릴 수 없어요.`)) return;
+  const folderId = currentGalleryFolder;
+  showToast(`⏳ ${ids.length}장 삭제 중...`);
+  const deleted = await _galleryBatchByIds(ids, 'DELETE', null);
+  if(deleted.length) {
+    const delSet = new Set(deleted);
+    const delPhotos = (galleryPhotos[folderId] || []).filter(p => delSet.has(p.id));
+    await deleteGalleryStorageFiles(delPhotos.flatMap(p => [p.file_path, p.thumb_path]));
+    galleryPhotos[folderId] = (galleryPhotos[folderId] || []).filter(p => !delSet.has(p.id));
+    const f = galleryFolders.find(f => f.id === folderId);
+    if(f) f._count = (galleryPhotos[folderId] || []).length;
+  }
+  gallerySelected.clear();
+  gallerySelectMode = false;
+  _renderGalleryFolderDetail(document.getElementById('main-content'), folderId);
+  showToast(deleted.length === ids.length ? `🗑️ ${deleted.length}장을 삭제했어요.` : `⚠️ ${deleted.length}/${ids.length}장만 삭제됐어요. 다시 시도해주세요.`);
 }
 
 async function handleGalleryFileSelect(e, folderId) {
