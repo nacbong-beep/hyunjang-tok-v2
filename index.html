@@ -5298,6 +5298,8 @@ function openInspectionDocView(docId) {
 function initLibViewerDrag() {
   const el = document.getElementById('lib-view-scroll');
   if(!el) return;
+  if(el._dragInited) return; // 도면을 열 때마다 리스너가 쌓이지 않도록 1회만 등록
+  el._dragInited = true;
   let isDragging = false, startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
 
   const onDown = (x, y) => {
@@ -5486,17 +5488,24 @@ async function saveLibraryEdit() {
 let libFloatWin = null;
 
 function popoutLibraryDoc() {
-  const imgSrc = document.getElementById('lib-view-img').src;
+  const imgSrc = document.getElementById('lib-view-img').getAttribute('src') || '';
   const title = document.getElementById('lib-view-title').textContent;
   const meta = document.getElementById('lib-view-meta').textContent;
+  // 제목/메타/URL을 HTML에 넣기 전에 이스케이프 (특수문자로 깨지거나 스크립트가 실행되는 것 방지)
+  const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  if(!imgSrc) { showToast('이미지를 불러오는 중이에요. 잠시 후 다시 시도해주세요.'); return; }
+
+  // 팝업을 먼저 열어 차단 여부를 확인 (차단되면 뷰어를 닫지 않고 그대로 둠)
+  const newWin = window.open('', '_blank', 'width=900,height=700,resizable=yes,scrollbars=yes,toolbar=no,menubar=no,location=no,status=no');
+  if(!newWin) { showToast('⚠️ 팝업이 차단됐어요. 주소창의 팝업 차단을 해제한 뒤 다시 눌러주세요.'); return; }
   closeLibraryDoc();
+  if(libFloatWin && !libFloatWin.closed && libFloatWin !== newWin) libFloatWin.close();
+  libFloatWin = newWin;
 
-  if(libFloatWin && !libFloatWin.closed) libFloatWin.close();
-
-  libFloatWin = window.open('', '_blank', 'width=900,height=700,resizable=yes,scrollbars=yes,toolbar=no,menubar=no,location=no,status=no');
   const doc = libFloatWin.document;
   doc.open();
-  doc.write('<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>' + title + '</title><style>');
+  doc.write('<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>' + esc(title) + '</title><style>');
   doc.write('* { box-sizing:border-box; margin:0; padding:0; }');
   doc.write('body { background:#1a2332; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; overflow:hidden; }');
   doc.write('.header { background:#263448; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }');
@@ -5507,10 +5516,10 @@ function popoutLibraryDoc() {
   doc.write('button:hover { background:rgba(255,255,255,.3); }');
   doc.write('</style></head><body>');
   doc.write('<div class="header">');
-  doc.write('<div><div style="color:#fff;font-size:13px;font-weight:700">' + title + '</div>');
-  doc.write('<div style="color:rgba(255,255,255,.5);font-size:11px;margin-top:2px">' + meta + '</div></div>');
+  doc.write('<div><div style="color:#fff;font-size:13px;font-weight:700">' + esc(title) + '</div>');
+  doc.write('<div style="color:rgba(255,255,255,.5);font-size:11px;margin-top:2px">' + esc(meta) + '</div></div>');
   doc.write('<div style="color:rgba(255,255,255,.4);font-size:11px">드래그로 이동 / 버튼으로 확대</div></div>');
-  doc.write('<div class="img-wrap" id="img-wrap"><img id="main-img" src="' + imgSrc + '" style="border-radius:6px;margin:auto;display:block;user-select:none;-webkit-user-drag:none"></div>');
+  doc.write('<div class="img-wrap" id="img-wrap"><img id="main-img" src="' + esc(imgSrc) + '" style="border-radius:6px;margin:auto;display:block;user-select:none;-webkit-user-drag:none"></div>');
   doc.write('<div class="zoom-bar">');
   doc.write('<button id="zm">− 축소</button>');
   doc.write('<span id="zl" style="color:rgba(255,255,255,.7);font-size:12px;min-width:44px;text-align:center">100%</span>');
@@ -5521,12 +5530,16 @@ function popoutLibraryDoc() {
   doc.close();
 
   const win = libFloatWin;
+  let popupInited = false; // onload가 직접 호출과 실제 load 이벤트로 두 번 실행되는 것 방지
   win.onload = function() {
+    if(popupInited) return;
+    popupInited = true;
     const img = win.document.getElementById('main-img');
     const wrap = win.document.getElementById('img-wrap');
     let baseFitWidth = 0, zoomScale = 1;
 
     function applyZoom() {
+      if(!baseFitWidth) return; // 이미지 로딩 전/실패 시 폭이 0px이 되어 사라지는 것 방지
       img.style.width = (baseFitWidth * zoomScale) + 'px';
       img.style.height = 'auto';
       win.document.getElementById('zl').textContent = Math.round(zoomScale * 100) + '%';
