@@ -574,7 +574,9 @@ function todayKey() {
   const kst = new Date(now.getTime() + 9*60*60*1000);
   return kst.toISOString().slice(0,10);
 }
-function addDaysKey(n) { const now = new Date(); const kst = new Date(now.getTime() + 9*60*60*1000); kst.setDate(kst.getDate()+n); return dateKey(kst); }
+// 한국(KST) 기준 오늘에서 n일 뒤 날짜 (브라우저 시간대와 무관하게 UTC 연산으로 계산)
+// 예전엔 +9시간 한 값을 다시 브라우저 현지 시각으로 읽어서, 한국에서 오후 3시 이후엔 하루 뒤 날짜가 나왔음
+function addDaysKey(n) { const kst = new Date(Date.now() + 9*60*60*1000); kst.setUTCDate(kst.getUTCDate()+n); return kst.toISOString().slice(0,10); }
 function dateKey(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function isSameDay(a,b) { return a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate(); }
 function formatDate(v) {
@@ -1209,33 +1211,48 @@ function renderCalendarView(el) {
 
     const fetchWeather = async () => {
       const wd = {};
+      let anyOk = false; // 한 번이라도 정상 응답을 받았는지
       const commonParams = `latitude=36.9923&longitude=127.0892&daily=weather_code,precipitation_sum&timezone=Asia/Seoul`;
+      // todayStr(한국 기준 오늘)에서 n일 이동 (UTC 연산)
+      const shiftKey = (key, n) => { const t = new Date(key + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
 
-      // 과거 구간
-      if(startDate <= todayStr) {
-        const yesterday = addDaysKey(-1);
+      // 과거 구간 (매월 1일엔 어제가 시작일보다 앞서므로 startDate < 오늘 일 때만 요청)
+      if(startDate < todayStr) {
+        const yesterday = shiftKey(todayStr, -1);
         const pastEnd = endDate < yesterday ? endDate : yesterday;
         try {
           const r = await fetch(`https://archive-api.open-meteo.com/v1/archive?${commonParams}&start_date=${startDate}&end_date=${pastEnd}`);
-          const d = await r.json();
-          (d.daily?.time||[]).forEach((date,i) => {
-            wd[date] = { code: d.daily.weather_code[i], rain: d.daily.precipitation_sum[i] };
-          });
+          if(r.ok) {
+            anyOk = true;
+            const d = await r.json();
+            (d.daily?.time||[]).forEach((date,i) => {
+              wd[date] = { code: d.daily.weather_code[i], rain: d.daily.precipitation_sum[i] };
+            });
+          }
         } catch(e) {}
       }
-      // 미래 구간
+      // 미래 구간 — 예보 서비스는 오늘 포함 최대 16일까지만 제공하므로 끝 날짜를 제한 (넘으면 400 에러로 전체 실패). 여유 1일을 두고 오늘+14일까지
       if(endDate >= todayStr) {
         const futureStart = startDate > todayStr ? startDate : todayStr;
-        try {
-          const r = await fetch(`https://api.open-meteo.com/v1/forecast?${commonParams}&start_date=${futureStart}&end_date=${endDate}`);
-          const d = await r.json();
-          (d.daily?.time||[]).forEach((date,i) => {
-            wd[date] = { code: d.daily.weather_code[i], rain: d.daily.precipitation_sum[i] };
-          });
-        } catch(e) {}
+        const maxForecastEnd = shiftKey(todayStr, 14);
+        const futureEnd = endDate < maxForecastEnd ? endDate : maxForecastEnd;
+        if(futureStart <= futureEnd) {
+          try {
+            const r = await fetch(`https://api.open-meteo.com/v1/forecast?${commonParams}&start_date=${futureStart}&end_date=${futureEnd}`);
+            if(r.ok) {
+              anyOk = true;
+              const d = await r.json();
+              (d.daily?.time||[]).forEach((date,i) => {
+                wd[date] = { code: d.daily.weather_code[i], rain: d.daily.precipitation_sum[i] };
+              });
+            }
+          } catch(e) {}
+        }
       }
 
-      localStorage.setItem(weatherCacheKey, JSON.stringify({data:wd, ts:Date.now()}));
+      // 실패하면 30분 뒤 재시도되도록 저장 시각을 앞당김 (정상일 때만 6시간 캐시). 캐시를 아예 안 쓰면 재렌더가 요청을 무한 반복함
+      const savedTs = anyOk ? Date.now() : Date.now() - (6*60*60*1000 - 30*60*1000);
+      localStorage.setItem(weatherCacheKey, JSON.stringify({data:wd, ts:savedTs}));
       renderCalendarView(el);
     };
     fetchWeather();
@@ -5229,19 +5246,43 @@ function libApplyZoomWidth() {
   if(label) label.textContent = Math.round(libZoomScale * 100) + '%';
 }
 
-function libZoom(delta) {
-  if(!libBaseFitWidth) return;
-  libZoomScale = Math.max(0.2, Math.min(8, libZoomScale + delta));
+let libUserZoomed = false; // 직접 확대/축소했는지 (true면 창 크기가 바뀌어도 자동 재맞춤 안 함)
+
+// 최대 배율: 기본 8배(맞춤 기준), 큰 도면은 원본 픽셀의 4배까지 (폭 20000px 상한)
+function libMaxScale() {
+  const img = document.getElementById('lib-view-img');
+  if(!img || !libBaseFitWidth) return 8;
+  const nat = img.naturalWidth || libBaseFitWidth;
+  return Math.max(8, Math.min(nat * 4, 20000) / libBaseFitWidth);
+}
+
+// 배율 변경. (cx, cy) 화면 좌표를 기준점으로 삼아 그 지점이 제자리에 머물게 함 (없으면 화면 중앙)
+function libSetZoom(s, cx, cy) {
+  const img = document.getElementById('lib-view-img');
+  const el = document.getElementById('lib-view-scroll');
+  if(!img || !el || !libBaseFitWidth) return;
+  const rect = el.getBoundingClientRect();
+  if(cx == null) { cx = rect.left + rect.width / 2; cy = rect.top + rect.height / 2; }
+  const oldW = img.offsetWidth;
+  const px = el.scrollLeft + (cx - rect.left);
+  const py = el.scrollTop + (cy - rect.top);
+  libZoomScale = Math.max(0.2, Math.min(libMaxScale(), s));
   libApplyZoomWidth();
+  const ratio = oldW ? img.offsetWidth / oldW : 1;
+  el.scrollLeft = px * ratio - (cx - rect.left);
+  el.scrollTop  = py * ratio - (cy - rect.top);
+  libUserZoomed = true;
+}
+
+// 버튼용: 부호만 사용 (+면 25% 확대, −면 축소)
+function libZoom(delta) {
+  libSetZoom(delta > 0 ? libZoomScale * 1.25 : libZoomScale / 1.25);
 }
 
 function libZoomReset() {
   // 원본 = 이미지의 실제 자연 픽셀 크기
   const img = document.getElementById('lib-view-img');
-  if(img && img.naturalWidth && libBaseFitWidth) {
-    libZoomScale = img.naturalWidth / libBaseFitWidth;
-    libApplyZoomWidth();
-  }
+  if(img && img.naturalWidth && libBaseFitWidth) libSetZoom(img.naturalWidth / libBaseFitWidth);
 }
 
 function libZoomFit() {
@@ -5253,15 +5294,18 @@ function libZoomFit() {
     if(label) label.textContent = '100%';
     return;
   }
-  const availW = Math.max(50, container.clientWidth - 40);  // padding 20px*2 고려
-  const availH = Math.max(50, container.clientHeight - 40);
+  const availW = container.clientWidth - 40;  // padding 20px*2 고려
+  const availH = container.clientHeight - 40;
+  if(availW < 80 || availH < 80) return;      // 창 크기가 아직 정해지지 않음 → resize 때 다시 맞춤
   const ratio = img.naturalWidth / img.naturalHeight;
   let w = availW, h = w / ratio;
   if(h > availH) { h = availH; w = h * ratio; }
   libBaseFitWidth = w;
   libZoomScale = 1;
+  libUserZoomed = false;
   img.style.width = w + 'px';
   img.style.height = 'auto';
+  container.scrollLeft = 0; container.scrollTop = 0;
   const label = document.getElementById('lib-zoom-label');
   if(label) label.textContent = '100%';
 }
@@ -5324,10 +5368,40 @@ function initLibViewerDrag() {
   window.addEventListener('mousemove', e => onMove(e.clientX, e.clientY));
   window.addEventListener('mouseup',   onUp);
 
-  // 터치 지원 (모바일)
-  el.addEventListener('touchstart', e => { const t=e.touches[0]; onDown(t.clientX, t.clientY); }, {passive:true});
-  el.addEventListener('touchmove',  e => { const t=e.touches[0]; onMove(t.clientX, t.clientY); }, {passive:true});
-  el.addEventListener('touchend',   onUp);
+  // 터치 지원 (모바일): 한 손가락 = 이동, 두 손가락 = 핀치 확대
+  el.style.touchAction = 'pan-x pan-y'; // 두 손가락 동작은 브라우저가 아닌 아래 코드가 처리
+  const imgEl = document.getElementById('lib-view-img');
+  if(imgEl) imgEl.style.transition = 'none'; // 핀치 중 폭 변화가 끌려오지 않도록
+  let pinchDist = 0, pinchScale = 1;
+  const touchDist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  el.addEventListener('touchstart', e => {
+    if(e.touches.length === 2) { isDragging = false; pinchDist = touchDist(e.touches); pinchScale = libZoomScale; }
+    else if(e.touches.length === 1) { const t = e.touches[0]; onDown(t.clientX, t.clientY); }
+  }, {passive:true});
+  el.addEventListener('touchmove', e => {
+    if(e.touches.length === 2 && pinchDist > 0) {
+      e.preventDefault();
+      const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+      libSetZoom(pinchScale * touchDist(e.touches) / pinchDist, cx, cy);
+    } else if(e.touches.length === 1 && !pinchDist) {
+      const t = e.touches[0]; onMove(t.clientX, t.clientY);
+    }
+  }, {passive:false});
+  el.addEventListener('touchend', e => { if(e.touches.length < 2) pinchDist = 0; onUp(); });
+
+  // Ctrl/⌘ + 휠 확대 (마우스 위치 기준)
+  el.addEventListener('wheel', e => {
+    if(!(e.ctrlKey || e.metaKey)) return;
+    e.preventDefault();
+    libSetZoom(libZoomScale * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX, e.clientY);
+  }, {passive:false});
+
+  // 창 크기가 바뀌면(폴드 펼침/접힘, 화면 회전 등) 직접 확대하기 전까지는 다시 맞춤
+  window.addEventListener('resize', () => {
+    const m = document.getElementById('lib-view-modal');
+    if(m && m.style.display !== 'none' && !libUserZoomed) libZoomFit();
+  });
 }
 
 async function openLibraryDoc(id) {
@@ -5505,20 +5579,23 @@ function popoutLibraryDoc() {
 
   const doc = libFloatWin.document;
   doc.open();
-  doc.write('<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>' + esc(title) + '</title><style>');
+  // viewport 메타: 없으면 모바일이 980px 데스크톱 폭으로 그려서 도면이 작아지고, 핀치가 이미지가 아닌 페이지를 확대함
+  doc.write('<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><title>' + esc(title) + '</title><style>');
   doc.write('* { box-sizing:border-box; margin:0; padding:0; }');
-  doc.write('body { background:#1a2332; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; overflow:hidden; }');
-  doc.write('.header { background:#263448; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; flex-shrink:0; }');
-  doc.write('.img-wrap { flex:1; overflow:auto; display:block; padding:12px; text-align:center; cursor:grab; }');
+  doc.write('html, body { height:100%; }');
+  doc.write('body { background:#1a2332; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; height:100dvh; overflow:hidden; }');
+  doc.write('.header { background:#263448; padding:10px 14px; display:flex; align-items:center; justify-content:space-between; gap:12px; flex-shrink:0; }');
+  // touch-action: 한 손가락은 스크롤(이동), 두 손가락 핀치는 브라우저가 아닌 아래 스크립트가 처리
+  doc.write('.img-wrap { flex:1; min-height:0; overflow:auto; display:block; padding:12px; text-align:center; cursor:grab; touch-action:pan-x pan-y; -webkit-overflow-scrolling:touch; }');
   doc.write('.img-wrap.dragging { cursor:grabbing; }');
-  doc.write('.zoom-bar { background:#263448; padding:8px 14px; display:flex; gap:8px; align-items:center; justify-content:center; flex-shrink:0; }');
-  doc.write('button { border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.1); color:#fff; border-radius:6px; padding:6px 12px; font-size:13px; cursor:pointer; }');
+  doc.write('.zoom-bar { background:#263448; padding:8px 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; justify-content:center; flex-shrink:0; }');
+  doc.write('button { border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.1); color:#fff; border-radius:6px; padding:8px 14px; font-size:13px; cursor:pointer; }');
   doc.write('button:hover { background:rgba(255,255,255,.3); }');
   doc.write('</style></head><body>');
   doc.write('<div class="header">');
   doc.write('<div><div style="color:#fff;font-size:13px;font-weight:700">' + esc(title) + '</div>');
   doc.write('<div style="color:rgba(255,255,255,.5);font-size:11px;margin-top:2px">' + esc(meta) + '</div></div>');
-  doc.write('<div style="color:rgba(255,255,255,.4);font-size:11px">드래그로 이동 / 버튼으로 확대</div></div>');
+  doc.write('<div style="color:rgba(255,255,255,.4);font-size:11px;text-align:right">드래그 이동 · 두 손가락/버튼으로 확대</div></div>');
   doc.write('<div class="img-wrap" id="img-wrap"><img id="main-img" src="' + esc(imgSrc) + '" style="border-radius:6px;margin:auto;display:block;user-select:none;-webkit-user-drag:none"></div>');
   doc.write('<div class="zoom-bar">');
   doc.write('<button id="zm">− 축소</button>');
@@ -5536,38 +5613,86 @@ function popoutLibraryDoc() {
     popupInited = true;
     const img = win.document.getElementById('main-img');
     const wrap = win.document.getElementById('img-wrap');
-    let baseFitWidth = 0, zoomScale = 1;
+    const label = win.document.getElementById('zl');
+    let baseFitWidth = 0, zoomScale = 1, userZoomed = false;
 
-    function applyZoom() {
+    // 최대 배율: 기본 8배(맞춤 기준), 큰 도면은 원본 픽셀의 4배까지 (폭 20000px 상한)
+    function maxScale() {
+      if(!baseFitWidth) return 8;
+      const nat = img.naturalWidth || baseFitWidth;
+      return Math.max(8, Math.min(nat * 4, 20000) / baseFitWidth);
+    }
+    function showLabel() { label.textContent = Math.round(zoomScale * 100) + '%'; }
+
+    // 배율 변경. (cx, cy) 화면 좌표를 기준점으로 삼아 그 지점이 제자리에 머물게 함 (없으면 화면 중앙)
+    function setZoom(s, cx, cy) {
       if(!baseFitWidth) return; // 이미지 로딩 전/실패 시 폭이 0px이 되어 사라지는 것 방지
+      const rect = wrap.getBoundingClientRect();
+      if(cx == null) { cx = rect.left + rect.width / 2; cy = rect.top + rect.height / 2; }
+      const oldW = img.offsetWidth;
+      const px = wrap.scrollLeft + (cx - rect.left);
+      const py = wrap.scrollTop + (cy - rect.top);
+      zoomScale = Math.max(0.2, Math.min(maxScale(), s));
       img.style.width = (baseFitWidth * zoomScale) + 'px';
       img.style.height = 'auto';
-      win.document.getElementById('zl').textContent = Math.round(zoomScale * 100) + '%';
+      const ratio = oldW ? img.offsetWidth / oldW : 1;
+      wrap.scrollLeft = px * ratio - (cx - rect.left);
+      wrap.scrollTop = py * ratio - (cy - rect.top);
+      userZoomed = true;
+      showLabel();
     }
-    function setZoom(s) {
-      zoomScale = Math.max(0.2, Math.min(8, s));
-      applyZoom();
-    }
+
+    // 창 크기에 맞춤. 창 크기가 아직 정해지지 않았으면(너무 작음) 건너뛰고 resize 때 다시 맞춤
     function fitZoom() {
       if(!img.naturalWidth) return;
-      const availW = Math.max(50, wrap.clientWidth - 24);
-      const availH = Math.max(50, wrap.clientHeight - 24);
+      const availW = wrap.clientWidth - 24;
+      const availH = wrap.clientHeight - 24;
+      if(availW < 80 || availH < 80) return;
       const ratio = img.naturalWidth / img.naturalHeight;
       let w = availW, h = w / ratio;
       if(h > availH) { h = availH; w = h * ratio; }
-      baseFitWidth = w; zoomScale = 1;
+      baseFitWidth = w; zoomScale = 1; userZoomed = false;
       img.style.width = w + 'px'; img.style.height = 'auto';
-      win.document.getElementById('zl').textContent = '100%';
+      wrap.scrollLeft = 0; wrap.scrollTop = 0;
+      showLabel();
     }
     img.onload = fitZoom;
     if(img.complete && img.naturalWidth) fitZoom();
 
-    win.document.getElementById('zm').onclick = () => setZoom(zoomScale - 0.2);
-    win.document.getElementById('zp').onclick = () => setZoom(zoomScale + 0.2);
+    // 창 크기가 바뀌거나 뒤늦게 확정되면(모바일 팝업 등) 직접 확대하기 전까지는 다시 맞춤
+    const refit = () => { if(!userZoomed) fitZoom(); };
+    win.addEventListener('resize', refit);
+    if(win.ResizeObserver) new win.ResizeObserver(refit).observe(wrap);
+
+    win.document.getElementById('zm').onclick = () => setZoom(zoomScale / 1.25);
+    win.document.getElementById('zp').onclick = () => setZoom(zoomScale * 1.25);
     win.document.getElementById('zr').onclick = () => { if(img.naturalWidth && baseFitWidth) setZoom(img.naturalWidth / baseFitWidth); };
     win.document.getElementById('zf').onclick = fitZoom;
 
-    // 드래그로 이동
+    // Ctrl/⌘ + 휠 확대 (마우스 위치 기준)
+    wrap.addEventListener('wheel', e => {
+      if(!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      setZoom(zoomScale * (e.deltaY < 0 ? 1.15 : 1 / 1.15), e.clientX, e.clientY);
+    }, { passive: false });
+
+    // 두 손가락 핀치 확대 (손가락 중심 기준). 한 손가락 이동은 기본 스크롤이 처리
+    let pinchDist = 0, pinchScale = 1;
+    const touchDist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+    wrap.addEventListener('touchstart', e => {
+      if(e.touches.length === 2) { pinchDist = touchDist(e.touches); pinchScale = zoomScale; }
+    }, { passive: true });
+    wrap.addEventListener('touchmove', e => {
+      if(e.touches.length === 2 && pinchDist > 0) {
+        e.preventDefault();
+        const cx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+        const cy = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+        setZoom(pinchScale * touchDist(e.touches) / pinchDist, cx, cy);
+      }
+    }, { passive: false });
+    wrap.addEventListener('touchend', e => { if(e.touches.length < 2) pinchDist = 0; }, { passive: true });
+
+    // 마우스 드래그로 이동
     let isDragging = false, startX = 0, startY = 0, scrollLeft = 0, scrollTop = 0;
     wrap.addEventListener('mousedown', e => {
       if(e.button !== 0) return;
@@ -7047,7 +7172,7 @@ function _renderPersonalView(el) {
   const thisWeekEnd = (() => {
     const d = new Date();
     const kst = new Date(d.getTime() + 9*60*60*1000);
-    kst.setDate(kst.getDate() + (7 - kst.getDay()));
+    kst.setUTCDate(kst.getUTCDate() + (7 - kst.getUTCDay())); // UTC 기준으로 계산 (현지 시각으로 읽으면 한국 오후 3시 이후 하루 어긋남)
     return kst.toISOString().slice(0,10);
   })();
   const filtered = personalCatFilter === '전체' ? personalNotes : personalNotes.filter(n => n.category === personalCatFilter);
@@ -8696,7 +8821,7 @@ function openEventModal(dateStr) {
   document.getElementById('event-delete-btn').style.display = 'none';
   document.getElementById('event-type-single').checked = true;
   toggleEventDateType();
-  setTimeout(()=>selectEventColor(editingEvent?.color||'#3b82f6'), 50);
+  setTimeout(()=>selectEventColor('#3b82f6'), 50); // 새 일정은 기본 파란색 (수정은 openEditEventModal에서 일정 색 사용)
   document.getElementById('event-modal').style.display = 'flex';
   setTimeout(()=>document.getElementById('event-title-input').focus(), 100);
 }
