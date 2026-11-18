@@ -2907,14 +2907,21 @@ function getCatLabel(category) {
 const WEATHER_ICONS = {0:'☀️',1:'🌤️',2:'⛅',3:'☁️',45:'🌫️',48:'🌫️',51:'🌦️',53:'🌦️',55:'🌧️',61:'🌧️',63:'🌧️',65:'🌧️',71:'❄️',73:'❄️',75:'❄️',80:'🌦️',81:'🌧️',82:'⛈️',95:'⛈️',96:'⛈️',99:'⛈️'};
 const WEATHER_DESC = {0:'맑음',1:'대체로맑음',2:'구름조금',3:'흐림',45:'안개',48:'안개',51:'이슬비',53:'이슬비',55:'이슬비',61:'비',63:'비',65:'강한비',71:'눈',73:'눈',75:'폭설',80:'소나기',81:'소나기',82:'강한소나기',95:'뇌우',96:'뇌우',99:'강한뇌우'};
 
+const _weeklyWeatherCache = {}; // 주 단위 날씨 캐시 (30분)
 async function loadWeatherForWeek(days) {
+  const startDate = days[0].key;
+  const endDate = days[days.length-1].key;
+  const ck = startDate + '~' + endDate;
+  const hit = _weeklyWeatherCache[ck];
+  if(hit && Date.now() - hit.ts < 30*60*1000) return hit.data;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 4000); // 4초 넘으면 날씨는 포기 (화면 로딩을 막지 않음)
   try {
-    const startDate = days[0].key;
-    const endDate = days[days.length-1].key;
     // 평택 장안동 위경도
-    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=36.9923&longitude=127.0892&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia/Seoul&start_date=${startDate}&end_date=${endDate}`);
-    if(!res.ok) return null;
+    const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=36.9923&longitude=127.0892&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=Asia/Seoul&start_date=${startDate}&end_date=${endDate}`, {signal: ctrl.signal});
+    if(!res.ok) { clearTimeout(timer); return null; }
     const data = await res.json();
+    clearTimeout(timer);
     const result = {};
     data.daily.time.forEach((date, i) => {
       const code = data.daily.weather_code[i];
@@ -2924,8 +2931,9 @@ async function loadWeatherForWeek(days) {
       const desc = WEATHER_DESC[code] || '';
       result[date] = `${icon} ${desc} ${max}°/${min}°`;
     });
+    _weeklyWeatherCache[ck] = {ts: Date.now(), data: result};
     return result;
-  } catch(e) { console.warn('날씨 로드 실패', e); return null; }
+  } catch(e) { clearTimeout(timer); console.warn('날씨 로드 실패/시간초과', e && e.name); return null; }
 }
 
 function getWeekDays(offset) {
@@ -3317,11 +3325,16 @@ async function renderWeeklyView(el) {
   const days = getWeekDays(weeklyOffset);
   // Supabase에서 최신 데이터 로드 후 렌더
   el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">불러오는 중...</div>';
-  await loadWeeklyFromSupabase(wk, days);
+  // 데이터와 날씨를 동시에 불러옴 (예전엔 차례대로 기다려서 느렸음)
+  const _t0 = performance.now();
+  let _tDb = 0, _tWx = 0;
+  const [, weatherData] = await Promise.all([
+    loadWeeklyFromSupabase(wk, days).then(()=>{ _tDb = Math.round(performance.now()-_t0); }),
+    loadWeatherForWeek(days).then(r=>{ _tWx = Math.round(performance.now()-_t0); return r; }),
+  ]);
+  console.log(`[주간업무일지] 데이터 ${_tDb}ms / 날씨 ${_tWx}ms`);
   const rows = ['작업사항','검측사항','확인사항','서류사항','기타'];
   const {mon, sat} = getWeekRange(weeklyOffset);
-  // 날씨 자동 로드
-  const weatherData = await loadWeatherForWeek(days);
 
   // 월 점프용 년/월 옵션 생성 (현재 표시중인 주의 월요일 기준)
   const jumpYear = mon.getFullYear();
