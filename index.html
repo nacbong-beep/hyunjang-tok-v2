@@ -3320,19 +3320,31 @@ function copyWeeklyText() {
   navigator.clipboard.writeText(text).then(()=>showToast('📋 클립보드에 복사됐어요!'));
 }
 
-async function renderWeeklyView(el) {
+async function renderWeeklyView(el, opts) {
+  opts = opts || {};
   const wk = weekKey(weeklyOffset);
   const days = getWeekDays(weeklyOffset);
-  // Supabase에서 최신 데이터 로드 후 렌더
-  el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">불러오는 중...</div>';
-  // 데이터와 날씨를 동시에 불러옴 (예전엔 차례대로 기다려서 느렸음)
   const _t0 = performance.now();
-  let _tDb = 0, _tWx = 0;
-  const [, weatherData] = await Promise.all([
-    loadWeeklyFromSupabase(wk, days).then(()=>{ _tDb = Math.round(performance.now()-_t0); }),
-    loadWeatherForWeek(days).then(r=>{ _tWx = Math.round(performance.now()-_t0); return r; }),
-  ]);
-  console.log(`[주간업무일지] 데이터 ${_tDb}ms / 날씨 ${_tWx}ms`);
+  if(!opts.skipLoad) {
+    // Supabase에서 최신 데이터 로드 후 렌더 (날씨는 기다리지 않음)
+    el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">불러오는 중...</div>';
+    await loadWeeklyFromSupabase(wk, days);
+    console.log(`[주간업무일지] 데이터 ${Math.round(performance.now()-_t0)}ms`);
+  }
+  // 날씨: 캐시에 있으면 바로 쓰고, 없으면 화면을 먼저 그린 뒤 도착하면 다시 그림(데이터 재조회 없이)
+  const _ck = days[0].key + '~' + days[days.length-1].key;
+  const _hit = _weeklyWeatherCache[_ck];
+  const weatherData = (_hit && Date.now() - _hit.ts < 30*60*1000) ? _hit.data : null;
+  if(!weatherData && !opts.skipLoad) {
+    loadWeatherForWeek(days).then(r => {
+      if(!r) return;
+      const ae = document.activeElement;
+      const editing = ae && ae.tagName === 'TEXTAREA';
+      if(currentView === 'weekly' && weekKey(weeklyOffset) === wk && !editing && document.getElementById('main-content') === el) {
+        renderWeeklyView(el, {skipLoad: true});
+      }
+    });
+  }
   const rows = ['작업사항','검측사항','확인사항','서류사항','기타'];
   const {mon, sat} = getWeekRange(weeklyOffset);
 
